@@ -1,0 +1,222 @@
+/**
+ * Domain model, PRD section 6.1.
+ *
+ * Everything in the PRD sketch is reproduced as written. Where the PRD's own
+ * screens need data the sketch does not hold, the addition is marked
+ * `PRD-ADDITION` with the section that needs it. Nothing in the sketch was
+ * renamed or removed.
+ */
+
+export type ISODateTime = string; // full ISO timestamp, e.g. 2026-08-27T10:15:00.000Z
+export type ISODate = string; // calendar date, e.g. 2026-08-27
+
+export type Subject = { kind: 'her' } | { kind: 'child'; childId: string };
+
+export type HerPhase = 'cycle_tracking' | 'pregnancy' | 'postpartum';
+
+export interface HerProfile {
+  name: string;
+  phase: HerPhase;
+  pregnancy?: Pregnancy; // exists while pregnant
+  postpartum?: { birthId: string; startedAt: ISODateTime };
+  cycle: { active: boolean; lastPeriodStart?: ISODate; periodDays?: ISODate[] };
+  hydrationGoalGlasses: number; // default 8
+  units: { volume: 'oz' | 'ml'; weight: 'kg' | 'lb' };
+  /** PRD-ADDITION (9.6, 11.3, S09 "Doctor · call"): every escalation offers a human to contact. */
+  provider?: { name: string; phone?: string };
+  /** PRD-ADDITION (9.5 "Shared with", B34): partner shown on checklist rows. UI only. */
+  partnerName?: string;
+}
+
+/** PRD-ADDITION (9.6): the sketch references Contraction without defining it. */
+export interface Contraction {
+  start: ISODateTime;
+  end?: ISODateTime;
+}
+
+export interface Pregnancy {
+  dueDate: ISODate;
+  labour?: { startedAt: ISODateTime; contractions: Contraction[]; endedAt?: ISODateTime };
+  birthId?: string;
+  /** PRD-ADDITION (9.5 This week checklist). */
+  checklist?: { birthPlanShared: boolean; hospitalBag: 'not_started' | 'packed' };
+}
+
+export interface BirthRecord {
+  id: string;
+  childId: string;
+  name?: string; // default "B/O <mother's name>"
+  datetime: ISODateTime;
+  place?: string;
+  weightG?: number;
+}
+
+export type FeedingMode = 'breast' | 'bottle' | 'solids';
+
+export interface Child {
+  id: string;
+  name: string;
+  dob: ISODate;
+  feeding: FeedingMode[];
+  /** PRD-ADDITION (7.4 "Avatars are photos or initials"): no photo means initials. */
+  photo?: string;
+  // stage is derived, not stored (section 13)
+}
+
+export type MealSlot = 'breakfast' | 'lunch' | 'snack' | 'dinner';
+export type BleedingLevel = 'spotting' | 'light' | 'medium' | 'heavy';
+export type MoodValue = 'low' | 'flat' | 'ok' | 'good';
+export type ReactionSeverity = 'mild' | 'moderate' | 'severe';
+
+export type LogSource = 'quick' | 'timer' | 'sheet' | 'derived';
+
+interface LogBase {
+  id: string;
+  subject: Subject;
+  at: ISODateTime;
+  source: LogSource;
+  /** PRD-ADDITION (9.4, 9.2 Mood): sheets carry a Notes field. */
+  note?: string;
+  /** PRD-ADDITION (9.4 Combo, S07 both sides): entries saved together share a group. */
+  groupId?: string;
+}
+
+export type LogPayload =
+  | { type: 'feed'; mode: 'breast'; side: 'left' | 'right'; minutes: number }
+  | { type: 'feed'; mode: 'bottle'; ml: number; content: 'formula' | 'expressed' }
+  | { type: 'feed'; mode: 'solids'; slot: MealSlot; foodIds: string[] }
+  | { type: 'diaper'; kind: 'wet' | 'dirty' | 'both' }
+  | { type: 'sleep'; start: ISODateTime; end?: ISODateTime }
+  | { type: 'pump'; side: 'left' | 'right' | 'both'; ml: number; minutes: number }
+  | { type: 'growth'; weightG?: number; lengthCm?: number; headCm?: number }
+  | { type: 'water'; glasses: number }
+  | { type: 'mood'; value: MoodValue }
+  | { type: 'bleeding'; level: BleedingLevel }
+  | { type: 'pelvic_floor'; sets: number }
+  | { type: 'pain'; location: string; intensity: 1 | 2 | 3 | 4 | 5 }
+  | {
+      type: 'period';
+      flow: BleedingLevel;
+      event: 'start' | 'day' | 'end';
+      /** PRD-ADDITION (9.8): day-detail sheet logs symptoms. */
+      symptoms?: string[];
+    }
+  | {
+      type: 'dose';
+      medicineId: string;
+      takenAt: ISODateTime;
+      /** PRD-ADDITION (9.5): which scheduled dose this ticks (a time or an anchor). */
+      slot?: string;
+    }
+  | { type: 'reaction'; foodId: string; symptoms: string[]; severity: ReactionSeverity }
+  | { type: 'note'; text: string }
+  /** PRD-ADDITION (5.2 pregnancy FAB, B28): Weight and Symptom tiles. */
+  | { type: 'weight'; kg: number }
+  | { type: 'symptom'; name: string }
+  /** PRD-ADDITION (3.3 D2, R12): practice contractions logged outside Labour mode. */
+  | { type: 'practice_contraction'; durationSec: number };
+
+export type LogEntry = LogBase & LogPayload;
+export type LogType = LogPayload['type'];
+
+export type MedicineSchedule =
+  | { times: string[] } // "08:00"
+  | { anchors: ('breakfast' | 'lunch' | 'dinner' | 'bedtime')[] };
+
+export interface Medicine {
+  id: string;
+  subject: Subject;
+  name: string;
+  doseText: string;
+  schedule: MedicineSchedule;
+  course?: { days: number; startedAt: ISODateTime }; // child courses use this
+  /** PRD-ADDITION (B29 "start date"): doses are scheduled from this date. */
+  startedOn?: ISODate;
+  /** PRD-ADDITION (9.7): pregnancy medicines that are no longer current are archived. */
+  archived?: boolean;
+}
+
+export type FormulaStatus = 'active' | 'finished' | 'discarded';
+
+export interface FormulaPack {
+  id: string;
+  childId: string;
+  brand?: string;
+  stage?: string; // free text, for example "Stage 2"
+  sizeText?: string; // free text, for example "400 g tin" or "sachet box"
+  openedOn: ISODate;
+  useWithinDays: number; // default 45; editable per pack
+  discardBy: ISODate; // derived: openedOn + useWithinDays
+  status: FormulaStatus;
+  closedOn?: ISODate;
+  note?: string;
+}
+
+export type ReactionStatus = 'none_yet' | 'none' | 'mild' | 'moderate' | 'severe';
+
+export interface FoodIntroduction {
+  foodId: string;
+  childId: string;
+  firstOn: ISODate;
+  allergenGroup?: string;
+  reaction: ReactionStatus;
+}
+
+export interface Insight {
+  id: string;
+  ruleId: string;
+  scope: 'her' | 'child' | 'both';
+  severity: 'info' | 'escalate';
+  headline: string;
+  body?: string;
+  action?: { label: string; effect: string };
+  dismissedUntil?: ISODateTime;
+}
+
+/** PRD-ADDITION (9.5 Coming up, B30): appointments are listed but not modelled in 6.1. */
+export interface Appointment {
+  id: string;
+  title: string;
+  at?: ISODateTime; // undefined = suggested, not booked
+  suggestedWeek?: number; // e.g. glucose test window
+  source: 'user' | 'suggested';
+  /** PRD-ADDITION (9.5): the suggested check this booking fulfils, so it leaves the suggestions. */
+  milestoneId?: string;
+}
+
+/** PRD-ADDITION (9.7): what the handoff archives under Me, History. */
+export interface ArchivedPregnancy {
+  dueDate: ISODate;
+  endedAt: ISODateTime;
+  outcome: 'birth' | 'ended';
+  birthId?: string;
+  appointments: Appointment[];
+  medicineIds: string[];
+  labour?: Pregnancy['labour'];
+}
+
+/** PRD-ADDITION (10.4): running timers persist as start timestamps. */
+export interface RunningTimers {
+  sleep?: { subject: Subject; start: ISODateTime };
+  breastfeed?: { childId: string; side: 'left' | 'right'; start: ISODateTime };
+}
+
+export interface DomainState {
+  her: HerProfile;
+  children: Child[];
+  births: BirthRecord[];
+  logs: LogEntry[];
+  medicines: Medicine[];
+  formulaPacks: FormulaPack[];
+  foodIntros: FoodIntroduction[];
+  appointments: Appointment[];
+  history: ArchivedPregnancy[];
+  timers: RunningTimers;
+  /** Snoozes and acknowledgements keyed by insight id (11.1, 11.3). */
+  insightMemory: Record<string, { snoozedUntil?: ISODateTime; acknowledgedAt?: ISODateTime }>;
+  /** Contextual cards that are snoozed or pending (9.7 "Finish your birth details", 9.8 "Not yet"). */
+  prompts: {
+    periodCardSnoozedUntil?: ISODateTime;
+    finishBirthDetails?: { birthId: string };
+  };
+}

@@ -1,0 +1,85 @@
+/*
+ * Weave design tokens.
+ * Source: Figma file FKBMLz8bDa0MlkDv1G582L (no Figma Variables exist; values read
+ * from frames 102:5878, 102:6137, 113:6641, 158:933, 152:461, 153:540, 155:679,
+ * 157:785, 205:783, 205:652, 205:1072, 205:891 on 2026-10-01).
+ *
+ * Decisions (2026-10-01): drifting values consolidated to the dominant one; text
+ * colours corrected to WCAG AA. Every change from Figma is listed in
+ * docs/FIGMA-DEVIATIONS.md with the original value.
+ */
+
+@theme {
+  /* ---------- Colour ---------- */
+  --color-bg: #faf8f5;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f0ece7; /* reading cards */
+
+  --color-ink: #2c2523; /* primary text, dark buttons. Consolidates #262220 #2a3531 #4c4546 #3c2a21 #1a1c1c */
+  --color-ink-2: #716763; /* secondary text. Figma #756b67 (4.40:1 on reading cards) darkened to pass on every surface */
+  --color-ink-3: #7b706a; /* muted text. Figma #a89f9a (2.45:1) and #9a9388, #b7b0ab, #a8a7a7, #847d75 corrected */
+  --color-ink-4: #998e89; /* non-text glyphs ("+", chevrons) at 3:1. Figma #a89f9a */
+  --color-ink-faint: #a89f9a; /* decorative only: tile and outline borders, as in Figma */
+
+  --color-line: #ebe6e1; /* dividers, pill borders. Consolidates #ede9e4 #eae7e2 #f0ece7 */
+  --color-handle: #cfc4c5; /* sheet drag handle */
+
+  --color-sage-100: #ebf3ee; /* AI "Noticing" cards only (7.1 rule) */
+  --color-sage-600: #3f6350; /* sage buttons, NOTICING label */
+  --color-olive-500: #7b8f6a; /* contraction bars, met signs, filled checks, last-side tag. Consolidates ring #7c9082 */
+  --color-hydration: #7dbaa4; /* hydration segment fill */
+
+  --color-coral-a: #f39e92; /* FAB gradient start (Figma) */
+  --color-coral-b: #e37d80; /* FAB gradient end (Figma) */
+  --color-coral-icon: #e17478; /* active tab icon, 3:1 non-text. Figma #e37d80 (2.80:1) */
+  --color-coral-ink: #c4504a; /* active tab label, 4.5:1. Figma #e37d80 */
+  --color-fab-ink: #ffffff;
+  --color-coral-dot: #d48c8f; /* Me body list: item with recent logs (decorative) */
+
+  --color-chip-child-bg: #d9edff;
+  --color-chip-child-fg: #306bb2; /* Figma #3373bf (4.03:1) */
+  --color-chip-her-bg: #ffe5ed;
+  --color-chip-her-fg: #bf3359;
+
+  /* Design additions, not in Figma (7.1). */
+  --color-terracotta: #b4532a; /* escalation accent bar */
+  --color-terracotta-ink: #8f3f1e;
+  --color-review-bg: #fff4d6; /* dev-only review marker */
+  --color-review-fg: #6b4a00;
+  --color-review-line: #c99a2e;
+
+  /* ---------- Type ---------- */
+  --font-serif: 'Lora', Georgia, 'Times New Roman', serif;
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+  /* ---------- Radii ---------- */
+  --radius-card: 24px; /* cards, insight, meal, list cards */
+  --radius-list: 20px; /* timeline container, metric tiles */
+  --radius-sheet: 15px; /* sheet top corners (Figma 15; PRD guessed 24) */
+  --radius-tile: 10px; /* quick-log tiles */
+  --radius-tag: 10px; /* subject chips */
+  --radius-chip: 7px; /* mood chips */
+  --radius-segment: 4px; /* hydration segments */
+  --radius-pill: 100px;
+
+  /* ---------- Shadows ---------- */
+  --shadow-card: 0 1px 2px #00000005;
+  --shadow-sheet: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  --shadow-fab: 0 8px 8px rgba(227, 125, 128, 0.25);
+
+  /* ---------- Motion (7.6) ---------- */
+  --ease-calm: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+:root {
+  /* Layout constants (Figma frame 402 x 874). */
+  --device-w: 402px;
+  --device-h: 874px;
+  --gutter: 20px;
+  --status-h: 44px;
+  --screen-top: 57px; /* Figma "Main" top padding, includes the 44px status bar */
+  --section-gap: 20px;
+  --tap: 44px; /* minimum tap target (PRD 15) */
+  --nav-h: 83px;
+  --fab-gradient: linear-gradient(96.34deg, var(--color-coral-a) 10%, var(--color-coral-b) 90%);
+}
