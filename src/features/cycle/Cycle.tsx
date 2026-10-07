@@ -97,8 +97,10 @@ export function CycleScreen() {
             <span key={i}>{d}</span>
           ))}
         </div>
-        <div role="grid" className="grid grid-cols-7 gap-y-1">
-          {cells.map((d) => {
+        <div role="grid" aria-label={format(month, 'MMMM yyyy')} className="flex flex-col gap-y-1">
+          {Array.from({ length: Math.ceil(cells.length / 7) }, (_, r) => cells.slice(r * 7, r * 7 + 7)).map((week) => (
+            <div role="row" key={toISODate(week[0]!)} className="grid grid-cols-7">
+          {week.map((d) => {
             const iso = toISODate(d);
             const inMonth = isSameMonth(d, month);
             const period = days.includes(iso);
@@ -120,6 +122,8 @@ export function CycleScreen() {
               </button>
             );
           })}
+            </div>
+          ))}
         </div>
       </section>
 

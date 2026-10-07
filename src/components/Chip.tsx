@@ -8,10 +8,13 @@ export function SubjectChip({ kind, label }: { kind: 'child' | 'her'; label: str
 
 /** Filter chip for timelines and lists (All, child name, Me). */
 export function FilterChip({ selected, children, className = '', ...rest }: ButtonHTMLAttributes<HTMLButtonElement> & { selected: boolean }) {
+  // As a radio option the state is aria-checked; as a toggle it is aria-pressed. Never both.
+  const isRadio = rest.role === 'radio';
   return (
     <button
       type="button"
-      aria-pressed={selected}
+      aria-pressed={isRadio ? undefined : selected}
+      aria-checked={isRadio ? selected : undefined}
       className={`inline-flex min-h-[44px] items-center rounded-pill border px-4 font-sans text-[13px] font-semibold transition-colors ${
         selected ? 'border-ink bg-ink text-surface' : 'border-line bg-surface text-ink'
       } ${className}`}
