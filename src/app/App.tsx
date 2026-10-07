@@ -1,22 +1,30 @@
 import { useEffect, useState } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
-import { BottomNav, ScreenHeader, StatusBar } from '../components/Shell';
+import { BottomNav, StatusBar } from '../components/Shell';
 import { ErrorBoundary } from '../components/States';
 import { DemoPanel } from '../demo/DemoPanel';
-import { Today, PhaseNote } from '../features/today/Today';
+import { Today } from '../features/today/Today';
 import { QuickLogSheet } from '../features/quicklog/QuickLogSheet';
 import { Gallery } from '../design/Gallery';
-import { S } from '../content/strings';
 import { useWeave } from '../state/store';
-import { useNow } from '../state/clock';
-import { formatLongDate } from '../domain/dates';
-import { postpartumLabel } from '../domain/stage';
-import { t } from '../components/Copy';
 import { DevNoticeProvider } from './DevNotice';
 import { ToastProvider } from './Toast';
 import { ProviderSheetProvider } from './ProviderSheet';
+import { ExplainProvider } from '../insights/ExplainProvider';
+import { AskScreen } from '../features/ask/Ask';
+import { HistoryScreen, SettingsScreen, SharingProvider } from '../features/settings/Settings';
+import { Onboarding } from '../features/onboarding/Onboarding';
+import { FeedFlowProvider } from '../features/feeds/FeedSheets';
+import { SleepFlowProvider } from '../features/sleep/SleepSheet';
+import { ActivePills } from '../features/timers/ActivePills';
 import { BirthDetails, Handoff } from '../features/birth/BirthDetails';
 import { SomethingChanged } from '../features/pregnancy/SomethingChanged';
+import { TimelineScreen } from '../features/timeline/Timeline';
+import { FormulaFlowProvider, FormulaStock } from '../features/formula/Formula';
+import { BabyTab, CoursesScreen, GrowthScreen, ModuleHistory, VaccinesScreen } from '../features/baby/Baby';
+import { CycleScreen } from '../features/cycle/Cycle';
+import { FoodDetail, FoodJourney, ReactionFlow, RecipeScreen, SolidsFlowProvider } from '../features/food/Food';
+import { BleedingScreen, HerMedicinesScreen, HerSleepScreen, HydrationScreen, MeScreen, MoodScreen, PainScreen, PelvicScreen } from '../features/me/Me';
 import { beginLog, setMetricsPersonaProvider } from '../metrics/timeToLog';
 
 setMetricsPersonaProvider(() => useWeave.getState().personaId);
@@ -39,6 +47,12 @@ function DeviceLayout() {
         <DevNoticeProvider>
           <ToastProvider>
           <ProviderSheetProvider>
+          <SharingProvider>
+          <ExplainProvider>
+          <FormulaFlowProvider>
+          <SolidsFlowProvider>
+          <FeedFlowProvider>
+          <SleepFlowProvider>
           <StatusBar
             right={
               <button type="button" onClick={() => setPanelOpen(!panelOpen)} className="rounded-pill border border-dashed border-review-line bg-review-bg px-2.5 py-1 font-sans text-[11px] font-semibold text-review-fg lg:hidden" aria-label="Demo controls">
@@ -46,22 +60,45 @@ function DeviceLayout() {
               </button>
             }
           />
-          <main className={`absolute inset-0 flex flex-col overflow-y-auto overflow-x-hidden px-5 pt-[var(--screen-top)] [scrollbar-width:none] ${labourOpen || location.pathname === '/welcome' ? 'pb-8' : 'pb-[calc(var(--nav-h)+32px)]'}`}>
+          <main className={`absolute inset-0 flex flex-col overflow-y-auto overflow-x-hidden px-5 pt-[var(--screen-top)] [scrollbar-width:none] ${labourOpen || location.pathname === '/welcome' || location.pathname === '/onboarding' ? 'pb-8' : 'pb-[calc(var(--nav-h)+32px)]'}`}>
             <ErrorBoundary>
               <Routes>
                 <Route path="/today" element={<Today onFab={() => { beginLog('today.empty'); setFab(true); }} />} />
-                <Route path="/me" element={<MePlaceholder />} />
-                <Route path="/baby" element={<BabyPlaceholder />} />
-                <Route path="/ask" element={<AskPlaceholder />} />
+                <Route path="/me" element={<MeScreen />} />
+                <Route path="/me/hydration" element={<HydrationScreen />} />
+                <Route path="/me/mood" element={<MoodScreen />} />
+                <Route path="/me/bleeding" element={<BleedingScreen />} />
+                <Route path="/me/pelvic" element={<PelvicScreen />} />
+                <Route path="/me/pain" element={<PainScreen />} />
+                <Route path="/me/sleep" element={<HerSleepScreen />} />
+                <Route path="/me/medicines" element={<HerMedicinesScreen />} />
+                <Route path="/me/cycle" element={<CycleScreen />} />
+                <Route path="/baby" element={<BabyTab />} />
+                <Route path="/baby/feeding" element={<ModuleHistory kind="feeding" />} />
+                <Route path="/baby/sleep" element={<ModuleHistory kind="sleep" />} />
+                <Route path="/baby/diaper" element={<ModuleHistory kind="diaper" />} />
+                <Route path="/baby/growth" element={<GrowthScreen />} />
+                <Route path="/baby/vaccines" element={<VaccinesScreen />} />
+                <Route path="/baby/medicines" element={<CoursesScreen />} />
+                <Route path="/baby/food" element={<FoodJourney />} />
+                <Route path="/baby/food/:foodId" element={<FoodDetail />} />
+                <Route path="/food/recipe/:id" element={<RecipeScreen />} />
+                <Route path="/food/reaction/:foodId?" element={<ReactionFlow />} />
+                <Route path="/ask" element={<AskScreen />} />
+                <Route path="/settings" element={<SettingsScreen />} />
+                <Route path="/me/history" element={<HistoryScreen />} />
+                <Route path="/onboarding" element={<Onboarding />} />
                 <Route path="/birth" element={<BirthDetails />} />
                 <Route path="/welcome" element={<Handoff />} />
                 <Route path="/changed" element={<SomethingChanged />} />
+                <Route path="/timeline" element={<TimelineScreen />} />
+                <Route path="/baby/formula" element={<FormulaStock />} />
                 <Route path="*" element={<Navigate to="/today" replace />} />
               </Routes>
             </ErrorBoundary>
           </main>
           {/* Labour mode strips Weave back to the timer (9.6): no nav, no FAB. */}
-          <BottomNav hidden={labourOpen || location.pathname === '/welcome'} onFab={() => { beginLog('fab'); setFab(true); }} />
+          <BottomNav hidden={labourOpen || location.pathname === '/welcome' || location.pathname === '/onboarding'} onFab={() => { beginLog('fab'); setFab(true); }} />
           <div id="sheet-root" className="pointer-events-none absolute inset-0 z-40 [&>*]:pointer-events-auto" />
           <QuickLogSheet open={fab} onOpenChange={setFab} />
           {panelOpen ? (
@@ -72,6 +109,13 @@ function DeviceLayout() {
               <DemoPanel />
             </div>
           ) : null}
+          <ActivePills hidden={labourOpen || location.pathname === '/welcome' || location.pathname === '/onboarding'} />
+          </SleepFlowProvider>
+          </FeedFlowProvider>
+          </SolidsFlowProvider>
+          </FormulaFlowProvider>
+          </ExplainProvider>
+          </SharingProvider>
           </ProviderSheetProvider>
           </ToastProvider>
         </DevNoticeProvider>
@@ -81,31 +125,6 @@ function DeviceLayout() {
       </aside>
     </div>
   );
-}
-
-function Placeholder({ label, title, pill, phase, what }: { label: string; title: string; pill?: string; phase: number; what: string }) {
-  return (
-    <div className="flex flex-col gap-5">
-      <ScreenHeader label={label} pill={pill} title={title} />
-      <PhaseNote phase={phase} what={what} />
-    </div>
-  );
-}
-
-function MePlaceholder() {
-  const state = useWeave((s) => s.domain);
-  const now = useNow();
-  const wk = postpartumLabel(state, now);
-  return <Placeholder label={S.meHeader.text} pill={wk ? t(S.weekPill, { n: wk }) : undefined} title={state.her.phase === 'postpartum' ? S.meTitlePostpartum.text : S.meHeader.text} phase={1} what="Me tab (S03), Bleeding (B20)" />;
-}
-function BabyPlaceholder() {
-  const state = useWeave((s) => s.domain);
-  const child = state.children[0];
-  return <Placeholder label={S.navBaby.text} title={child?.name ?? S.navBaby.text} phase={1} what="Baby tab (B08), Formula stock (B39)" />;
-}
-function AskPlaceholder() {
-  const now = useNow();
-  return <Placeholder label={formatLongDate(now)} title={S.navAsk.text} phase={4} what="Ask AI (B33), canned state-aware answers" />;
 }
 
 export function App() {

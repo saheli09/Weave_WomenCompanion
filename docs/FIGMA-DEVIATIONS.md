@@ -30,7 +30,24 @@ wins for visuals, the PRD for behaviour, and conflicts are logged here.
 - The S11 dial view keeps the date label from the frame. The summary uses the "Labour mode · elapsed" header.
 - Birth details (S12): rows edit inline with an input and a "Done" action. Empty Where shows "Add a place". The same screen edits an existing birth (from "Finish your birth details"), titled "Birth details" with a plain Save.
 - Handoff (B02), Something has changed (B31) and the pregnancy-ended screen aren't in Figma. They're built from existing patterns, and the loss path uses neutral ink buttons, not sage.
+- The diaper inline chooser opens as a full-width strip under the child and Me cards, not inside the child card. Inside the half-width card its three choices dropped to 38px wide at 360px.
+- Water "+" on the Me card shows an inline Undo next to "glasses today" for four seconds (10.1), with no toast.
+- Breastfeed sheet (S07): the running side's button reads "Stop" on sage. A paused, unsaved feed shows "Discard this feed". The child card shows "Now · feeding · right" while a timer runs.
+- Bottle (B04) and Combo (B05) sheets aren't in Figma. They're built from the sheet, chip and list patterns, with a −/+ amount stepper.
 - Coming up gets an "Add an appointment" footer row, and the This-week rows toggle in one tap. Neither appears in Figma.
+
+- **Me tab (S03), built as the host for B18 to B23:**
+  - The mood tile's chips are a 2 x 2 grid of 44px buttons (Figma: one row at 22px).
+  - The hydration tile's "+" logs instantly with an inline Undo.
+  - The Body list adds "Your sleep".
+  - A "Records" section (Medicines, History) and a settings gear are added under PRD 5.1.
+  - The carousel shows only her own and shared ("both") observations.
+- **Solids sheet (S06), built because the food journey needs it:**
+  - The Food row is a chip picker with search and "Add" for new foods.
+  - Slot icons are the Figma assets.
+- **Today, toddler (S02):** the meal card comes from the recipe rule, not a fixed recipe. The insight shown is whichever ranks first (the formula tin reminder for D5).
+- **Insight headlines are tappable** and open "Why am I seeing this?" (B32). They keep their visual size, with a 44px hit area.
+- **Not in Figma:** Baby tab, module histories with seven-day charts, growth, vaccinations, medicine courses, timeline, formula stock, cycle calendar, food journey, recipe, reaction flow, Ask, settings, sharing, history and onboarding. All are built from existing tokens and components; charts use olive, never sage.
 
 ## Copy
 

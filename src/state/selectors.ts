@@ -134,6 +134,31 @@ export function subjectLabel(subject: Subject, state: DomainState): { kind: 'chi
   return { kind: 'child', label: state.children.find((c) => c.id === subject.childId)?.name ?? 'Child' };
 }
 
+/** Entries over the last `days` days, newest first, grouped by calendar day. Filter by subject. */
+export function timelineDays(state: DomainState, now: Date, days: number, filter: 'all' | 'her' | string) {
+  const from = new Date(now);
+  from.setHours(0, 0, 0, 0);
+  from.setDate(from.getDate() - (days - 1));
+  const entries = state.logs
+    .filter((l) => parseDate(l.at) >= from && parseDate(l.at) <= now)
+    .filter((l) => !(l.type === 'growth' && l.source === 'derived'))
+    .filter((l) => l.type !== 'practice_contraction' || state.her.phase === 'pregnancy')
+    .filter((l) => filter === 'all' || (filter === 'her' ? l.subject.kind === 'her' : l.subject.kind === 'child' && l.subject.childId === filter))
+    .sort((a, b) => (a.at < b.at ? 1 : -1));
+  const groups: { day: Date; items: ReturnType<typeof toItem>[] }[] = [];
+  for (const l of entries) {
+    const d = parseDate(l.at);
+    const g = groups.find((x) => isSameDay(x.day, d));
+    if (g) g.items.push(toItem(l, state));
+    else groups.push({ day: d, items: [toItem(l, state)] });
+  }
+  return groups;
+}
+
+function toItem(l: LogEntry, state: DomainState) {
+  return { id: l.id, subject: subjectLabel(l.subject, state), text: timelineText(l, state), time: formatTime(l.at) };
+}
+
 export function timelineItems(state: DomainState, now: Date) {
   return logsToday(state, now)
     .filter((l) => !(l.type === 'growth' && l.source === 'derived'))

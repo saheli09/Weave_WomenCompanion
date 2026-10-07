@@ -38,7 +38,7 @@ export function SomethingChanged() {
       </div>
       <ListCard>
         <ListRow size="lg" label={S.changedArrived.text} chevron onClick={() => navigate('/birth')} />
-        <ListRow size="lg" label={S.changedConcern.text} chevron onClick={openProvider} />
+        <ListRow size="lg" label={S.changedConcern.text} chevron onClick={() => openProvider()} />
         <ListRow size="lg" label={S.changedEnded.text} chevron onClick={() => setView('ended')} />
         <ListRow size="lg" label={S.changedElse.text} chevron onClick={() => setNote(true)} />
       </ListCard>
@@ -96,7 +96,7 @@ function Ended({ onBack }: { onBack: () => void }) {
         </section>
         <section className="flex flex-col gap-3">
           <Copy as="p" entry={S.endedSupport} className="type-body text-ink-2" />
-          <SecondaryButton size="lg" onClick={openProvider}>
+          <SecondaryButton size="lg" onClick={() => openProvider('support')}>
             {S.endedTalk.text}
           </SecondaryButton>
         </section>

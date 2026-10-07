@@ -9,6 +9,7 @@ export interface TimelineItem {
   text: string;
   time: string;
   onClick?: () => void;
+  a11y?: string;
 }
 
 export function ActivityTimeline({ items, empty }: { items: TimelineItem[]; empty?: ReactNode }) {
@@ -31,7 +32,7 @@ export function ActivityTimeline({ items, empty }: { items: TimelineItem[]; empt
         return (
           <li key={i.id}>
             {i.onClick ? (
-              <button type="button" onClick={i.onClick} className={cls} aria-label={`${i.subject.label}, ${i.text}, ${i.time}`}>
+              <button type="button" onClick={i.onClick} className={cls} aria-label={i.a11y ?? `${i.subject.label}, ${i.text}, ${i.time}`}>
                 {row}
               </button>
             ) : (

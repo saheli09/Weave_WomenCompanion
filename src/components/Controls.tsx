@@ -167,9 +167,11 @@ export function TimerControls({
 }) {
   const col = (t: SideTimer) => (
     <div className="flex flex-col items-center gap-[5px] px-3">
-      <span className={`mb-[5px] rounded-[5px] px-5 py-2.5 font-sans text-[14px] font-medium text-ink ${lastSide === t.side ? 'bg-olive-500/22' : 'invisible'}`} aria-hidden={lastSide !== t.side}>
-        {S.lastSide.text}
-      </span>
+      {lastSide === t.side ? (
+        <span className="mb-[5px] rounded-[5px] bg-olive-500/22 px-5 py-2.5 font-sans text-[14px] font-medium text-ink">{S.lastSide.text}</span>
+      ) : (
+        <span aria-hidden className="mb-[5px] h-[37px]" />
+      )}
       <div className="flex items-center gap-[15px]">
         <p className="font-serif text-ink" aria-live={t.running ? 'off' : undefined}>
           <span className="text-[36px]">{t.minutes}</span>

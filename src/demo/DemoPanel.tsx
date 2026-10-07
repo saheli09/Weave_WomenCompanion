@@ -42,6 +42,7 @@ export function DemoPanel() {
         <nav className="flex gap-3 text-[12px] font-semibold">
           <Link to="/today" className="underline">App</Link>
           <Link to="/gallery" className="underline">Gallery</Link>
+          <Link to="/onboarding" className="underline">Onboarding</Link>
         </nav>
       </div>
 

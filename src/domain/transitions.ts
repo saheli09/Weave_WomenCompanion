@@ -103,6 +103,22 @@ export function removeLog(state: DomainState, id: string): DomainState {
   return { ...state, logs: state.logs.filter((l) => l.id !== id) };
 }
 
+/**
+ * Edit an older entry (10.3: via the timeline row). The type never changes;
+ * the subject and id stay. Payload fields are merged and checked loosely.
+ */
+export function updateLog(state: DomainState, id: string, patch: Partial<LogEntry>): DomainState {
+  const current = state.logs.find((l) => l.id === id);
+  if (!current) throw new TransitionError('Entry not found');
+  if (patch.type && patch.type !== current.type) throw new TransitionError('Entry type cannot change');
+  const next = { ...current, ...patch, id: current.id, subject: current.subject, type: current.type } as LogEntry;
+  if (next.type === 'feed' && next.mode === 'bottle' && !(next.ml > 0)) throw new TransitionError('Amount must be above zero');
+  if (next.type === 'feed' && next.mode === 'breast' && !(next.minutes > 0)) throw new TransitionError('Minutes must be above zero');
+  if (next.type === 'water' && !(next.glasses > 0)) throw new TransitionError('Glasses must be above zero');
+  if (next.type === 'sleep' && next.end && next.end <= next.start) throw new TransitionError('Sleep must end after it starts');
+  return { ...state, logs: state.logs.map((l) => (l.id === id ? next : l)) };
+}
+
 // ---------- Labour (9.6) ----------
 
 function requirePregnancy(state: DomainState) {
@@ -351,6 +367,79 @@ export function stopMedicine(state: DomainState, id: string): DomainState {
   return { ...state, medicines: state.medicines.map((m) => (m.id === id ? { ...m, archived: true } : m)) };
 }
 
+/** Child medicine course (B17): name, dose, times, optional number of days. Never a suggested dose. */
+export function addCourse(state: DomainState, childId: string, input: MedicineInput & { days?: number; reminder?: boolean }, now: Date): { state: DomainState; id: string } {
+  const r = addMedicine(state, { kind: 'child', childId }, input);
+  return {
+    id: r.id,
+    state: { ...r.state, medicines: r.state.medicines.map((m) => (m.id === r.id ? { ...m, reminder: input.reminder, course: input.days ? { days: input.days, startedAt: iso(now) } : undefined } : m)) },
+  };
+}
+
+/** End a course early; it moves to history. Courses with a day count also end on their own. */
+export function endCourse(state: DomainState, id: string, now: Date): DomainState {
+  return {
+    ...state,
+    medicines: state.medicines.map((m) => {
+      if (m.id !== id) return m;
+      const startedAt = m.course?.startedAt ?? iso(now);
+      // Shorten the course so it ends now (fractional days); history then shows today as the end date.
+      const days = Math.max(0, (now.getTime() - new Date(startedAt).getTime()) / 864e5);
+      return { ...m, archived: true, course: { startedAt, days } };
+    }),
+  };
+}
+
+// ---------- Vaccinations (B16) ----------
+
+export function markVaccine(state: DomainState, childId: string, vaccineId: string, doneOn: ISODate | null): DomainState {
+  const rest = (state.vaccinations ?? []).filter((v) => !(v.childId === childId && v.vaccineId === vaccineId));
+  return { ...state, vaccinations: doneOn ? [...rest, { childId, vaccineId, doneOn }] : rest };
+}
+
+// ---------- Growth (B15) ----------
+
+export function logGrowth(state: DomainState, childId: string, m: { weightG?: number; lengthCm?: number; headCm?: number }, at: Date) {
+  if (!m.weightG && !m.lengthCm && !m.headCm) throw new TransitionError('Add at least one measurement');
+  if (m.weightG !== undefined && (m.weightG < 400 || m.weightG > 30000)) throw new TransitionError('Weight out of range');
+  if (m.lengthCm !== undefined && (m.lengthCm < 30 || m.lengthCm > 130)) throw new TransitionError('Length out of range');
+  if (m.headCm !== undefined && (m.headCm < 20 || m.headCm > 60)) throw new TransitionError('Head out of range');
+  return addLog(state, { kind: 'child', childId }, { type: 'growth', ...m }, at, 'sheet');
+}
+
+// ---------- Settings (B35) ----------
+
+export const DEFAULT_SETTINGS: NonNullable<DomainState['settings']> = {
+  insightFrequency: 'standard',
+  notifications: { doses: true, tins: true, insights: true },
+  sharing: { feeds: true, appointments: true, me: false },
+};
+
+export function updateSettings(
+  state: DomainState,
+  patch: {
+    units?: Partial<HerProfile['units']>;
+    hydrationGoalGlasses?: number;
+    provider?: HerProfile['provider'];
+    partnerName?: string;
+    settings?: Partial<NonNullable<DomainState['settings']>>;
+  },
+): DomainState {
+  if (patch.hydrationGoalGlasses !== undefined && (patch.hydrationGoalGlasses < 4 || patch.hydrationGoalGlasses > 16)) throw new TransitionError('Goal out of range');
+  const settings = { ...DEFAULT_SETTINGS, ...state.settings, ...patch.settings };
+  return {
+    ...state,
+    settings,
+    her: {
+      ...state.her,
+      units: { ...state.her.units, ...patch.units },
+      hydrationGoalGlasses: patch.hydrationGoalGlasses ?? state.her.hydrationGoalGlasses,
+      provider: patch.provider === undefined ? state.her.provider : patch.provider,
+      partnerName: patch.partnerName === undefined ? state.her.partnerName : patch.partnerName.trim() || undefined,
+    },
+  };
+}
+
 // ---------- Appointments ----------
 
 export type AppointmentInput = { title: string; at: ISODateTime; milestoneId?: string };
@@ -399,5 +488,6 @@ export function checkInvariants(state: DomainState): string[] {
     if (p.status !== 'active' && !p.closedOn) errors.push(`tin ${p.id} closed without a date`);
   }
   for (const f of state.foodIntros) if (!childIds.has(f.childId)) errors.push(`food intro ${f.foodId} points at a missing child`);
+  for (const v of state.vaccinations ?? []) if (!childIds.has(v.childId)) errors.push(`vaccine ${v.vaccineId} points at a missing child`);
   return errors;
 }

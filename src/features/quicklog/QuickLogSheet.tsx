@@ -6,6 +6,11 @@ import { MedicineSheet } from '../medicines/MedicineSheet';
 import { useDoseActions } from '../medicines/useDoseActions';
 import { useHerLogs } from './useHerLogs';
 import { SymptomSheet, WeightSheet, NoteSheet } from './HerLogSheets';
+import { BleedingSheet, DiaperSheet } from './BabyLogs';
+import { useFeedFlow } from '../feeds/FeedSheets';
+import { useSleepFlow } from '../sleep/SleepSheet';
+import { PumpSheet } from './PumpSheet';
+import { useFormulaFlow } from '../formula/Formula';
 import { formatTimeCompact } from '../../domain/dates';
 import { doseSlotsToday } from '../../state/selectors';
 import { S } from '../../content/strings';
@@ -69,14 +74,25 @@ export function QuickLogSheet({ open, onOpenChange }: { open: boolean; onOpenCha
   const now = useNow();
   const dev = useDevNotice();
   const { logWater } = useHerLogs();
-  const [sub, setSub] = useState<'mood' | 'meds' | 'symptom' | 'weight' | 'note' | null>(null);
+  const { openFeed } = useFeedFlow();
+  const { openSleep } = useSleepFlow();
+  const { quickOpen } = useFormulaFlow();
+  const [sub, setSub] = useState<'mood' | 'meds' | 'symptom' | 'weight' | 'note' | 'diaper' | 'bleeding' | 'pump' | null>(null);
 
-  // Built so far: pregnancy tiles (water, mood, medicine, symptom, weight, note). Postpartum tiles land with that stage.
+  // Built so far: pregnancy tiles, and postpartum water, mood, medicine, diaper, bleeding. Feed, sleep, pump and formula come in later steps.
   const tiles = quickLogTiles(state, now, (id) => {
-    if (id === 'water') {
+    if (id === 'formula') {
+      onOpenChange(false);
+      const c = primaryChild(state);
+      if (c) quickOpen(c.id, 'fab');
+    } else if (id === 'feed' || id === 'sleep') {
+      onOpenChange(false);
+      const c = primaryChild(state);
+      if (c) (id === 'feed' ? openFeed : openSleep)(c.id);
+    } else if (id === 'water') {
       onOpenChange(false);
       logWater('fab');
-    } else if (id === 'mood' || id === 'medicine' || id === 'symptom' || id === 'weight' || id === 'note') {
+    } else if (id === 'mood' || id === 'medicine' || id === 'symptom' || id === 'weight' || id === 'note' || id === 'diaper' || id === 'bleeding' || id === 'pump') {
       onOpenChange(false);
       setSub(id === 'medicine' ? 'meds' : id);
     } else {
@@ -102,6 +118,9 @@ export function QuickLogSheet({ open, onOpenChange }: { open: boolean; onOpenCha
       <SymptomSheet open={sub === 'symptom'} onOpenChange={(o) => !o && setSub(null)} />
       <WeightSheet open={sub === 'weight'} onOpenChange={(o) => !o && setSub(null)} />
       <NoteSheet open={sub === 'note'} onOpenChange={(o) => !o && setSub(null)} />
+      <DiaperSheet open={sub === 'diaper'} onOpenChange={(o) => !o && setSub(null)} child={primaryChild(state)} />
+      <BleedingSheet open={sub === 'bleeding'} onOpenChange={(o) => !o && setSub(null)} />
+      <PumpSheet open={sub === 'pump'} onOpenChange={(o) => !o && setSub(null)} />
     </>
   );
 }

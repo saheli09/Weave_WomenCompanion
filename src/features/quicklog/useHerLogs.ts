@@ -16,11 +16,13 @@ export function useHerLogs() {
   const undo = useWeave((s) => s.undo);
   const toast = useToast();
 
-  const logWater = (entry: string) => {
+  /** With `inline`, the caller shows its own inline Undo next to the count (10.1) instead of a toast. */
+  const logWater = (entry: string, opts: { inline?: boolean } = {}) => {
     const e = log({ kind: 'her' }, { type: 'water', glasses: 1 }, 'quick');
     commitLog('water', entry);
     const s = useWeave.getState().domain;
-    toast(fmt(S.toastWater, { count: waterToday(s, now()), goal: s.her.hydrationGoalGlasses }), () => undo([e.id]));
+    if (!opts.inline) toast(fmt(S.toastWater, { count: waterToday(s, now()), goal: s.her.hydrationGoalGlasses }), () => undo([e.id]));
+    return e.id;
   };
 
   const logMood = (value: MoodValue, entry: string) => {

@@ -120,12 +120,13 @@ export function ScreenHeader({ label, pill, title, subtitle, onSettings }: { lab
  * breastfeed timer runs. Tap to end.
  * ------------------------------------------------------------------------- */
 
-export function RunningPill({ label, onClick }: { label: string; onClick: () => void }) {
+export function RunningPill({ label, onClick, a11yLabel }: { label: string; onClick: () => void; a11yLabel?: string }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="absolute bottom-[96px] left-1/2 z-20 flex min-h-[44px] -translate-x-1/2 items-center gap-2 rounded-pill bg-ink px-5 font-sans text-[14px] font-semibold text-surface shadow-sheet"
+      aria-label={a11yLabel}
+      className="flex min-h-[44px] items-center gap-2 rounded-pill bg-ink px-5 font-sans text-[14px] font-semibold whitespace-nowrap text-surface shadow-sheet"
     >
       <span aria-hidden className="size-2 animate-pulse rounded-full bg-hydration" />
       {label}

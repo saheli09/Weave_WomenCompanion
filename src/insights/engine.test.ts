@@ -54,3 +54,23 @@ describe('quiet period after a pregnancy ends (9.10)', () => {
     expect(runInsights(rules, { state: s, now: new Date(ANCHOR.getTime() + 15 * 864e5) })).toHaveLength(2);
   });
 });
+
+describe('fewer like this and the Fewer setting (B32, B35)', () => {
+  it('mutes a rule for a week; escalations cannot be muted', async () => {
+    const { muteRule } = await import('./engine');
+    const s = muteRule(muteRule(buildPersona('D3'), 'R05', ANCHOR), 'R14', ANCHOR);
+    const rules = [
+      rule('a', [{ id: 'R05', template: 'R05', scope: 'her', priority: 1, at: ANCHOR.toISOString() }]),
+      rule('b', [{ id: 'R14:x', template: 'R14', scope: 'her', priority: 0, at: ANCHOR.toISOString() }]),
+    ];
+    expect(runInsights(rules, { state: s, now: ANCHOR }).map((i) => i.id)).toEqual(['R14:x']);
+    expect(runInsights(rules, { state: s, now: new Date(ANCHOR.getTime() + 8 * 864e5) })).toHaveLength(2);
+  });
+  it('Fewer keeps the two most useful info cards, plus any escalation', () => {
+    const base = buildPersona('D3');
+    const s = { ...base, settings: { insightFrequency: 'fewer' as const, notifications: { doses: true, tins: true, insights: true }, sharing: { feeds: false, appointments: false, me: false } } };
+    const info = (id: string, template: 'R02' | 'R05' | 'R10' | 'R04', priority: number) => ({ id, template, scope: 'her' as const, priority, at: ANCHOR.toISOString() });
+    const rules = [rule('a', [info('R02', 'R02', 5), info('R05', 'R05', 4), info('R10', 'R10', 3), info('R04', 'R04', 1)])];
+    expect(runInsights(rules, { state: s, now: ANCHOR }).map((i) => i.id)).toEqual(['R02', 'R05']);
+  });
+});

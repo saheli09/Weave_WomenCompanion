@@ -29,7 +29,7 @@ export function Avatar({ src, name, size = 22 }: { src?: string; name: string; s
 
 export interface KPI {
   value: string;
-  caption: string;
+  caption: ReactNode;
   onAdd?: () => void;
   addLabel?: string;
 }
@@ -45,14 +45,14 @@ export function SubjectCard({ name, avatar, kpi, rows, className = '' }: { name:
         <div className="flex items-center justify-between">
           <p className="type-kpi whitespace-nowrap text-ink">{kpi.value}</p>
           {kpi.onAdd ? (
-            <button type="button" onClick={kpi.onAdd} aria-label={kpi.addLabel} className="-mr-3 grid size-11 place-items-center text-ink-4">
+            <button type="button" onClick={kpi.onAdd} aria-label={kpi.addLabel} className="-mr-3 grid size-11 shrink-0 place-items-center text-ink-4">
               <Plus size={13} />
             </button>
           ) : null}
         </div>
-        <p className="type-caption text-ink-2" style={{ fontSize: 11 }}>
+        <div className="type-caption flex min-h-[15px] items-center gap-2 text-ink-2" style={{ fontSize: 11 }}>
           {kpi.caption}
-        </p>
+        </div>
       </div>
       <div aria-hidden className="h-px w-full bg-line" />
       <div className="flex flex-col pt-1.5">{rows}</div>
@@ -60,7 +60,7 @@ export function SubjectCard({ name, avatar, kpi, rows, className = '' }: { name:
   );
 }
 
-export function KPIRow({ label, value, muted, onAdd, addLabel }: { label: string; value: string; muted?: boolean; onAdd?: () => void; addLabel?: string }) {
+export function KPIRow({ label, value, muted, onAdd, addLabel, expanded }: { label: string; value: string; muted?: boolean; onAdd?: () => void; addLabel?: string; expanded?: boolean }) {
   const content = (
     <>
       <span className="type-secondary text-ink-2">{label}</span>
@@ -71,7 +71,7 @@ export function KPIRow({ label, value, muted, onAdd, addLabel }: { label: string
     </>
   );
   return onAdd ? (
-    <button type="button" onClick={onAdd} aria-label={addLabel ? `${addLabel}. ${label}: ${value}` : undefined} className="flex min-h-[44px] w-full items-center justify-between text-left">
+    <button type="button" onClick={onAdd} aria-expanded={expanded} aria-label={addLabel ? `${addLabel}. ${label}: ${value}` : undefined} className="flex min-h-[44px] w-full items-center justify-between text-left">
       {content}
     </button>
   ) : (

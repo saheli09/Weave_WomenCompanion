@@ -129,7 +129,7 @@ function SummaryView({ labourStart, stats, now }: { labourStart: string; stats: 
         </SecondaryButton>
         <ListCard radius="list">
           <li>
-            <button type="button" onClick={openProvider} className="flex min-h-[52px] w-full items-center justify-between gap-3 text-left">
+            <button type="button" onClick={() => openProvider()} className="flex min-h-[52px] w-full items-center justify-between gap-3 text-left">
               <Copy entry={S.labourCallRow} className="type-row text-ink" />
               <Chevron className="text-ink-4" />
             </button>

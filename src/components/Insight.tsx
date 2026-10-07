@@ -49,8 +49,9 @@ export function InsightCard({ insight, compact = false, ...h }: { insight: Rende
         <button
           type="button"
           onClick={() => h.onExplain?.(insight)}
-          className={`text-left text-ink ${compact ? 'type-insight-sm' : 'type-insight'}`}
+          className={`hit-44 text-left text-ink ${compact ? 'type-insight-sm' : 'type-insight'}`}
           aria-describedby={insight.body ? `${insight.id}-body` : undefined}
+          title={S.explainHint.text}
         >
           {insight.headline}
         </button>

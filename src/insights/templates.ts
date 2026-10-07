@@ -37,7 +37,7 @@ export const TEMPLATES = {
   R03: {
     ruleId: 'R03',
     severity: 'info',
-    headline: copy('Day {day} of your period, and {count} glasses so far.', 'headline'),
+    headline: copy('Day {day} of your period, and {water} so far today.', 'headline'),
     body: copy('Some people find water helps on heavier days.', 'body', clinical('11.2 R03', 'Figma claims hydration eases cramping; softened, needs review')),
     actions: [copy('Log a glass', 'action')],
   },
@@ -65,7 +65,7 @@ export const TEMPLATES = {
   R06_gap: {
     ruleId: 'R06',
     severity: 'info',
-    headline: copy('Feeds are {direction} apart today than {name}’s recent average.', 'headline'),
+    headline: copy('Feeds are {direction} today than {name}’s recent average.', 'headline'),
     body: copy('Compared with {name}’s own recent days only.', 'body'),
     actions: [],
   },

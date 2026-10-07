@@ -1,6 +1,5 @@
 import { useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { differenceInMinutes } from 'date-fns';
 import { S } from '../../content/strings';
 import { readingForWeek } from '../../content/reading';
 import { milestonesForWeek } from '../../content/milestones';
@@ -9,8 +8,15 @@ import { ScreenHeader } from '../../components/Shell';
 import { InsightCarousel } from '../../components/Insight';
 import { SubjectCard, KPIRow, Section, ListCard, ListRow, AddRow, ChecklistRow, ReadingCard, ContextCard, Avatar } from '../../components/Cards';
 import { ActivityTimeline } from '../../components/Timeline';
-import { EmptyState } from '../../components/States';
-import { PrimaryButton, GhostButton, TextAction } from '../../components/Button';
+import { EmptyState, InlineUndo, useUndo } from '../../components/States';
+import { BleedingSheet, DiaperChooser } from '../quicklog/BabyLogs';
+import { useHerLogs } from '../quicklog/useHerLogs';
+import { useFeedFlow } from '../feeds/FeedSheets';
+import { EditLogSheet } from '../timeline/EditLogSheet';
+import { CycleCard, DaySheet } from '../cycle/Cycle';
+import { FirstFoodPrompts, MealCard } from '../food/Food';
+import { useSleepFlow } from '../sleep/SleepSheet';
+import { PrimaryButton, GhostButton } from '../../components/Button';
 import { Chevron, Icon, Plus } from '../../components/Icon';
 import { format } from 'date-fns';
 import { MoodSheet } from '../quicklog/QuickLogSheet';
@@ -19,6 +25,7 @@ import { setChecklist, startLabour } from '../../domain/transitions';
 import { LabourScreen } from '../labour/Labour';
 import { useToast } from '../../app/Toast';
 import { useProviderSheet } from '../../app/ProviderSheet';
+import { useSharing } from '../settings/Settings';
 import { formatChildAge, formatDayMonth, formatDuration, formatLongDate, formatTimeCompact, numberWord, capitalise, parseDate, pregnancyWeek, minutesSince, formatTime, toISODate } from '../../domain/dates';
 import { currentPeriodDay, deriveTodayState, primaryChild, STAGE_CONFIG, type TodayState } from '../../domain/stage';
 import type { Child, DomainState, Medicine } from '../../domain/types';
@@ -42,10 +49,6 @@ import {
 import { useDomain, useWeave } from '../../state/store';
 import { useNow } from '../../state/clock';
 import { useInsights } from '../../insights/useInsights';
-import { useDevNotice } from '../../app/DevNotice';
-import { FOODS } from '../../content/foods';
-import { fmt } from '../../content/copy';
-import { TEMPLATES } from '../../insights/templates';
 
 /**
  * Today (9.1), all states. Phase 0 builds the composition for each state from
@@ -86,10 +89,7 @@ function Compose({ state, now, todayState, insights, onFab }: { state: DomainSta
           <ScreenHeader label={date} pill={pill} title={greeting(now, state.her.name)} />
           {carousel}
           <FinishBirthDetails state={state} />
-          <div className="flex w-full items-start gap-3">
-            {child ? <ChildCard state={state} now={now} child={child} toddler={todayState === 'toddler'} /> : null}
-            <MeCard state={state} now={now} />
-          </div>
+          <CardsRow state={state} now={now} child={child} toddler={todayState === 'toddler'} />
           {todayState === 'postpartum_solids' || todayState === 'toddler' ? <SolidsBlock state={state} now={now} child={child!} /> : null}
           {todayState === 'toddler' ? <CourseBlock state={state} now={now} /> : null}
           <TodaySoFar state={state} now={now} onFab={onFab} />
@@ -101,6 +101,7 @@ function Compose({ state, now, todayState, insights, onFab }: { state: DomainSta
         <>
           <ScreenHeader label={date} title={greeting(now, state.her.name)} />
           {carousel}
+          <CycleCard state={state} now={now} />
           <MeCard state={state} now={now} />
           <TodaySoFar state={state} now={now} onFab={onFab} />
         </>
@@ -110,12 +111,47 @@ function Compose({ state, now, todayState, insights, onFab }: { state: DomainSta
 
 /* ---------------- Postpartum and toddler ---------------- */
 
-function ChildCard({ state, now, child, toddler }: { state: DomainState; now: Date; child: Child; toddler: boolean }) {
-  const dev = useDevNotice();
+/**
+ * Child and Me cards side by side. The diaper chooser opens as a full-width
+ * strip directly under the cards: inside a half-width card its three choices
+ * could not stay 44px wide at 360px (PRD 15).
+ */
+function CardsRow({ state, now, child, toddler }: { state: DomainState; now: Date; child?: Child; toddler: boolean }) {
+  const [diaperOpen, setDiaperOpen] = useState(false);
+  return (
+    <div className="flex w-full flex-col gap-2">
+      <div className="flex w-full items-start gap-3">
+        {child ? (
+          <ChildCard
+            state={state}
+            now={now}
+            child={child}
+            toddler={toddler}
+            diaperOpen={diaperOpen}
+            onDiaper={() => {
+              if (diaperOpen) return setDiaperOpen(false);
+              beginLog('today.child.diaper');
+              setDiaperOpen(true);
+            }}
+          />
+        ) : null}
+        <MeCard state={state} now={now} />
+      </div>
+      {child && diaperOpen ? <DiaperChooser child={child} onDone={() => setDiaperOpen(false)} /> : null}
+    </div>
+  );
+}
+
+function ChildCard({ state, now, child, toddler, diaperOpen, onDiaper }: { state: DomainState; now: Date; child: Child; toddler: boolean; diaperOpen: boolean; onDiaper: () => void }) {
+  const { openFeed } = useFeedFlow();
+  const { openSleep } = useSleepFlow();
   // 17.1 #5 resolution: at the toddler stage the card leads with meals, not milk feeds.
   const last = toddler ? lastMeal(state, now, child) : lastFeed(state, now, child);
-  const value = last ? formatDuration(minutesSince(last.at, now)) : '--';
-  const caption = !last
+  const feeding = state.timers.breastfeed?.childId === child.id ? state.timers.breastfeed.running : undefined;
+  const value = feeding ? S.feedingNowValue.text : last ? formatDuration(minutesSince(last.at, now)) : '--';
+  const caption = feeding
+    ? t(S.feedingNowCaption, { side: feeding.side })
+    : !last
     ? (toddler ? S.noMealYet : S.noFeedYet).text
     : toddler && last.mode === 'solids'
       ? `${S.sinceLastMeal.text} · ${last.slot}`
@@ -124,11 +160,33 @@ function ChildCard({ state, now, child, toddler }: { state: DomainState; now: Da
     <SubjectCard
       name={child.name}
       avatar={child.photo}
-      kpi={{ value, caption, onAdd: () => dev('Feed sheet', 1), addLabel: t(S.logFeedA11y, { name: child.name }) }}
+      kpi={{
+        value,
+        caption,
+        onAdd: () => {
+          beginLog('today.child.feed');
+          openFeed(child.id);
+        },
+        addLabel: t(S.logFeedA11y, { name: child.name }),
+      }}
       rows={
         <>
-          <KPIRow label={S.diapers.text} value={String(diapersToday(state, now, child))} onAdd={() => dev('Diaper chooser', 1)} addLabel={t(S.logDiaperA11y, { name: child.name })} />
-          <KPIRow label={S.slept.text} value={formatDuration(sleptToday(state, now, { kind: 'child', childId: child.id }))} />
+          <KPIRow
+            label={S.diapers.text}
+            value={String(diapersToday(state, now, child))}
+            onAdd={onDiaper}
+            addLabel={t(S.logDiaperA11y, { name: child.name })}
+            expanded={diaperOpen}
+          />
+          <KPIRow
+            label={S.slept.text}
+            value={state.timers.sleep?.subject.kind === 'child' && state.timers.sleep.subject.childId === child.id ? S.feedingNowValue.text : formatDuration(sleptToday(state, now, { kind: 'child', childId: child.id }))}
+            onAdd={() => {
+              beginLog('today.child.sleep');
+              openSleep(child.id);
+            }}
+            addLabel={t(S.logSleepA11y, { name: child.name })}
+          />
         </>
       }
     />
@@ -136,7 +194,15 @@ function ChildCard({ state, now, child, toddler }: { state: DomainState; now: Da
 }
 
 function MeCard({ state, now }: { state: DomainState; now: Date }) {
-  const dev = useDevNotice();
+  const undoLogs = useWeave((s) => s.undo);
+  const { logWater } = useHerLogs();
+  const waterUndo = useUndo();
+  const [sheet, setSheet] = useState<'bleeding' | 'mood' | null>(null);
+  const [periodDayOpen, setPeriodDay] = useState<string | null>(null);
+  const open = (which: 'bleeding' | 'mood') => {
+    beginLog(`today.her.${which}`);
+    setSheet(which);
+  };
   const glasses = waterToday(state, now);
   const periodDay = currentPeriodDay(state, now);
   const period = latestToday(state, now, 'period');
@@ -144,24 +210,43 @@ function MeCard({ state, now }: { state: DomainState; now: Date }) {
   const mood = latestToday(state, now, 'mood');
   const rows = periodDay ? (
     <>
-      <KPIRow label={S.period.text} value={t(S.periodDay, { n: periodDay })} onAdd={() => dev('Period log', 3)} addLabel={S.logPeriodA11y.text} />
+      <KPIRow label={S.period.text} value={t(S.periodDay, { n: periodDay })} onAdd={() => (beginLog('today.her.period'), setPeriodDay(toISODate(now)))} addLabel={S.logPeriodA11y.text} />
       <KPIRow label={S.flow.text} value={period ? cap(period.flow) : S.add.text} muted={!period} />
     </>
   ) : (
     <>
       {state.her.phase === 'postpartum' ? (
-        <KPIRow label={S.bleeding.text} value={bleeding ? cap(bleeding.level) : S.add.text} muted={!bleeding} onAdd={() => dev('Bleeding sheet', 1)} addLabel={S.logBleedingA11y.text} />
+        <KPIRow label={S.bleeding.text} value={bleeding ? cap(bleeding.level) : S.add.text} muted={!bleeding} onAdd={() => open('bleeding')} addLabel={S.logBleedingA11y.text} />
       ) : null}
-      <KPIRow label={S.mood.text} value={mood ? cap(mood.value) : S.add.text} muted={!mood} onAdd={() => dev('Mood sheet', 1)} addLabel={S.logMoodA11y.text} />
+      <KPIRow label={S.mood.text} value={mood ? cap(mood.value) : S.add.text} muted={!mood} onAdd={() => open('mood')} addLabel={S.logMoodA11y.text} />
     </>
   );
   return (
-    <SubjectCard
-      name={S.herChip.text}
-      avatar="/avatars/her.png"
-      kpi={{ value: t(S.glassesOfGoal, { count: glasses, goal: state.her.hydrationGoalGlasses }), caption: S.glassesToday.text, onAdd: () => dev('Water quick log', 1), addLabel: S.addGlassA11y.text }}
-      rows={rows}
-    />
+    <>
+      <SubjectCard
+        name={S.herChip.text}
+        avatar="/avatars/her.png"
+        kpi={{
+          value: t(S.glassesOfGoal, { count: glasses, goal: state.her.hydrationGoalGlasses }),
+          caption: (
+            <>
+              <span>{S.glassesToday.text}</span>
+              <InlineUndo visible={Boolean(waterUndo.pendingKey)} onUndo={waterUndo.run} label={S.undo.text} />
+            </>
+          ),
+          // Instant increment with an inline Undo for about four seconds (10.1, 10.3).
+          onAdd: () => {
+            const id = logWater('today.her.water', { inline: true });
+            waterUndo.offer(id, () => undoLogs([id]));
+          },
+          addLabel: S.addGlassA11y.text,
+        }}
+        rows={rows}
+      />
+      <BleedingSheet open={sheet === 'bleeding'} onOpenChange={(o) => !o && setSheet(null)} entry="today.her.bleeding" />
+      <MoodSheet open={sheet === 'mood'} onOpenChange={(o) => !o && setSheet(null)} entry="today.her.mood" />
+      <DaySheet date={periodDayOpen} onClose={() => setPeriodDay(null)} />
+    </>
   );
 }
 
@@ -172,37 +257,17 @@ function FinishBirthDetails({ state }: { state: DomainState }) {
 }
 
 function SolidsBlock({ state, now, child }: { state: DomainState; now: Date; child: Child }) {
-  const dev = useDevNotice();
-  // First-food prompt stays for 72 hours, then retires into the journal (9.9).
-  const fresh = state.foodIntros.filter((f) => f.childId === child.id && f.reaction === 'none_yet' && differenceInMinutes(now, parseDate(f.firstOn)) < 72 * 60);
   return (
     <>
-      <PhaseNote phase={3} what="Today’s meal card (R08, B13)" />
-      {fresh.map((f) => (
-        <ContextCard
-          key={f.foodId}
-          titleStyle="prompt"
-          title={
-            f.firstOn === toISODate(now)
-              ? fmt(TEMPLATES.R07.headline, { Food: capitalise(FOODS[f.foodId]?.name ?? f.foodId) })
-              : t(S.foodIntroducedOn, { Food: capitalise(FOODS[f.foodId]?.name ?? f.foodId), date: formatDayMonth(f.firstOn) })
-          }
-          body={S.noReactionYet.text}
-          actions={
-            <>
-              <GhostButton onClick={() => dev('Reaction flow', 3)}>{S.logReaction.text}</GhostButton>
-              <TextAction onClick={() => dev('Snooze prompt', 3)}>{S.notNow.text}</TextAction>
-            </>
-          }
-        />
-      ))}
+      <MealCard state={state} now={now} child={child} />
+      <FirstFoodPrompts state={state} now={now} child={child} />
     </>
   );
 }
 
 function CourseBlock({ state, now }: { state: DomainState; now: Date }) {
-  const dev = useDevNotice();
-  const courses = activeCourses(state, now).filter((m) => m.subject.kind === 'child');
+  const { take, untake } = useDoseActions();
+  const courses = activeCourses(state, now).filter((m) => m.subject.kind === 'child' && !m.archived);
   if (!courses.length) return null;
   return (
     <Section label={S.medicineCourse.text}>
@@ -218,7 +283,12 @@ function CourseBlock({ state, now }: { state: DomainState; now: Date }) {
               label={m.name}
               sublabel={t(S.courseDay, { dose: m.doseText, day, days: m.course!.days })}
               value={taken ? formatTimeCompact(slots.find((s) => s.takenAt)!.takenAt!) : S.doseNotTaken.text}
-              onToggle={() => dev('Log dose', 3)}
+              onToggle={() => {
+                const slot = slots.find((x) => x.medicine.id === m.id);
+                if (!slot) return;
+                if (slot.takenAt) untake(m.id, slot.slot);
+                else (beginLog('today.course'), take(m.id, slot.slot, 'today.course'));
+              }}
               a11yLabel={`${m.name}, ${m.doseText}, day ${day} of ${m.course!.days}. ${taken ? 'Taken' : 'Not taken yet'}`}
             />
           );
@@ -229,20 +299,22 @@ function CourseBlock({ state, now }: { state: DomainState; now: Date }) {
 }
 
 function TodaySoFar({ state, now, onFab }: { state: DomainState; now: Date; onFab: () => void }) {
-  const dev = useDevNotice();
-  const items = timelineItems(state, now);
+  const navigate = useNavigate();
+  const [editing, setEditing] = useState<string | null>(null);
+  const items = timelineItems(state, now).map((i) => ({ ...i, onClick: () => setEditing(i.id), a11y: t(S.editEntryA11y, { what: i.text, time: i.time }) }));
   return (
     <Section
       label={S.todaySoFar.text}
       right={
         items.length ? (
-          <button type="button" onClick={() => dev('Full timeline', 1)} className="hit-44 type-micro normal-case font-semibold text-ink-3">
+          <button type="button" onClick={() => navigate('/timeline')} className="hit-44 type-micro normal-case font-semibold text-ink-3">
             {S.all.text}
           </button>
         ) : undefined
       }
     >
       <ActivityTimeline items={items} empty={<EmptyState line={S.nothingLoggedYet.text} action={S.nothingLoggedAction.text} onAction={onFab} />} />
+      <EditLogSheet id={editing} onClose={() => setEditing(null)} />
     </Section>
   );
 }
@@ -375,8 +447,8 @@ function ComingUp({ state, now, week }: { state: DomainState; now: Date; week: n
 
 /** This week checklist (9.5). Hospital bag and birth plan toggle in one tap, with Undo. */
 function ThisWeek({ state, late }: { state: DomainState; late: boolean }) {
-  const dev = useDevNotice();
   const openProvider = useProviderSheet();
+  const { openSharing } = useSharing();
   const apply = useWeave((s) => s.apply);
   const toast = useToast();
   const p = state.her.pregnancy!;
@@ -407,7 +479,7 @@ function ThisWeek({ state, late }: { state: DomainState; late: boolean }) {
           <>
             {bag}
             {state.her.provider ? (
-              <ListRow label={S.doctor.text} value={t(S.callShort, { name: state.her.provider.name.replace('Dr. ', '') })} onClick={openProvider} a11yLabel={t(S.callA11y, { name: state.her.provider.name })} />
+              <ListRow label={S.doctor.text} value={t(S.callShort, { name: state.her.provider.name.replace('Dr. ', '') })} onClick={() => openProvider()} a11yLabel={t(S.callA11y, { name: state.her.provider.name })} />
             ) : null}
             {plan}
           </>
@@ -416,7 +488,7 @@ function ThisWeek({ state, late }: { state: DomainState; late: boolean }) {
             {plan}
             {bag}
             <ListRow label={S.labourModeRow.text} value={S.readyAtWeek36.text} />
-            <ListRow label={S.sharing.text} value={partner ?? S.notShared.text} onClick={() => dev('Partner sharing (B34, P2)', 4)} />
+            <ListRow label={S.sharing.text} value={partner ?? S.notShared.text} onClick={openSharing} />
           </>
         )}
       </ListCard>
@@ -425,7 +497,7 @@ function ThisWeek({ state, late }: { state: DomainState; late: boolean }) {
 }
 
 /** Your medicines today (9.5): circle ticks a dose, the name opens edit (B29). */
-function MedicinesToday({ state, now }: { state: DomainState; now: Date }) {
+export function MedicinesToday({ state, now }: { state: DomainState; now: Date }) {
   const [sheet, setSheet] = useState<{ open: boolean; editing?: Medicine }>({ open: false });
   const { take, untake } = useDoseActions();
   const slots = doseSlotsToday(state, now, { kind: 'her' });

@@ -53,6 +53,14 @@ export function inQuietPeriod(state: DomainState, now: Date): boolean {
   return Boolean(ended && now.getTime() - new Date(ended.endedAt).getTime() < QUIET_AFTER_LOSS_DAYS * 864e5);
 }
 export const SNOOZE_MS = 24 * 3600_000;
+/** Settings "Fewer" (B35): at most two info cards. */
+export const FEWER_MAX = 2;
+
+/** "Show fewer like this" (B32): mute a rule for a week. Escalations cannot be muted (11.3). */
+export function muteRule(state: DomainState, ruleId: string, now: Date): DomainState {
+  const key = `rule:${ruleId}`;
+  return { ...state, insightMemory: { ...state.insightMemory, [key]: { snoozedUntil: new Date(now.getTime() + 7 * 864e5).toISOString() } } };
+}
 
 export function render(c: Candidate, memory: DomainState['insightMemory']): RenderedInsight {
   const t = TEMPLATES[c.template];
@@ -76,7 +84,17 @@ export function runInsights(rules: Rule[], ctx: InsightContext): RenderedInsight
   const memory = ctx.state.insightMemory;
   const t = ctx.now.getTime();
   const quiet = inQuietPeriod(ctx.state, ctx.now);
-  const candidates = rules.flatMap((r) => r.evaluate(ctx)).filter((c) => !quiet || TEMPLATES[c.template].severity === 'escalate');
+  const fewer = ctx.state.settings?.insightFrequency === 'fewer';
+  const candidates = rules
+    .flatMap((r) => r.evaluate(ctx))
+    .filter((c) => {
+      if (TEMPLATES[c.template].severity === 'escalate') return true; // safety cards always show
+      if (quiet) return false;
+      // "Show fewer like this" (B32) mutes a rule for a week.
+      const muted = memory[`rule:${TEMPLATES[c.template].ruleId}`]?.snoozedUntil;
+      if (muted && new Date(muted).getTime() > t) return false;
+      return !fewer || c.priority >= 3;
+    });
   const visible = candidates.filter((c) => {
     const m = memory[c.id];
     const escalate = TEMPLATES[c.template].severity === 'escalate';
@@ -99,7 +117,9 @@ export function runInsights(rules: Rule[], ctx: InsightContext): RenderedInsight
     seen.add(ruleId);
     return true;
   });
-  return capped.slice(0, MAX_CAROUSEL).map((c) => render(c, memory));
+  const max = fewer ? FEWER_MAX : MAX_CAROUSEL;
+  const escalations = capped.filter((c) => TEMPLATES[c.template].severity === 'escalate');
+  return capped.slice(0, Math.max(max, escalations.length)).map((c) => render(c, memory));
 }
 
 /** "Not now": 24 hour snooze. Ignored for escalations. */

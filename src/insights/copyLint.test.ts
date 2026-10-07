@@ -1,7 +1,10 @@
 import { S } from '../content/strings';
 import { READING } from '../content/reading';
 import { MILESTONES } from '../content/milestones';
+import { RECIPES } from '../content/recipes';
+import { copy } from '../content/copy';
 import { HUMAN_CONTACT, lintEntries, lintText } from './copyLint';
+import { RULE_WORDS } from './explain';
 import { TEMPLATES as RAW, type InsightTemplate } from './templates';
 
 const TEMPLATES: Record<string, InsightTemplate> = RAW;
@@ -27,15 +30,21 @@ describe('copy lint: every template and string passes 11.4', () => {
     expect(problems, fail(problems)).toEqual([]);
   });
 
+  it('explainer rule wording', () => {
+    const problems = lintEntries(RULE_WORDS);
+    expect(problems, fail(problems)).toEqual([]);
+  });
+
   it('UI strings', () => {
     const problems = lintEntries(S);
     expect(problems, fail(problems)).toEqual([]);
   });
 
-  it('reading cards and milestone content', () => {
+  it('reading cards, milestones and recipes', () => {
     const entries = Object.fromEntries([
       ...READING.flatMap((r) => [[`reading.${r.id}.headline`, r.headline], [`reading.${r.id}.body`, r.body]]),
       ...MILESTONES.map((m) => [`milestone.${m.id}`, m.title]),
+      ...RECIPES.flatMap((r) => [[`recipe.${r.id}.name`, copy(r.name, 'label')], ...r.steps.map((st, i) => [`recipe.${r.id}.step${i}`, copy(st, 'body')])]),
     ]);
     const problems = lintEntries(entries);
     expect(problems, fail(problems)).toEqual([]);

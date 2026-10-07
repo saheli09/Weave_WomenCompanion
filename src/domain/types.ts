@@ -84,7 +84,8 @@ interface LogBase {
 export type LogPayload =
   | { type: 'feed'; mode: 'breast'; side: 'left' | 'right'; minutes: number }
   | { type: 'feed'; mode: 'bottle'; ml: number; content: 'formula' | 'expressed' }
-  | { type: 'feed'; mode: 'solids'; slot: MealSlot; foodIds: string[] }
+  /** PRD-ADDITION (B13): recipeId when logged from "Mark as fed", to avoid repeats within three days. */
+  | { type: 'feed'; mode: 'solids'; slot: MealSlot; foodIds: string[]; recipeId?: string }
   | { type: 'diaper'; kind: 'wet' | 'dirty' | 'both' }
   | { type: 'sleep'; start: ISODateTime; end?: ISODateTime }
   | { type: 'pump'; side: 'left' | 'right' | 'both'; ml: number; minutes: number }
@@ -130,6 +131,8 @@ export interface Medicine {
   doseText: string;
   schedule: MedicineSchedule;
   course?: { days: number; startedAt: ISODateTime }; // child courses use this
+  /** PRD-ADDITION (B17 "optional gentle reminder"): a mock; no notifications in the prototype. */
+  reminder?: boolean;
   /** PRD-ADDITION (B29 "start date"): doses are scheduled from this date. */
   startedOn?: ISODate;
   /** PRD-ADDITION (9.7): pregnancy medicines that are no longer current are archived. */
@@ -198,7 +201,21 @@ export interface ArchivedPregnancy {
 /** PRD-ADDITION (10.4): running timers persist as start timestamps. */
 export interface RunningTimers {
   sleep?: { subject: Subject; start: ISODateTime };
-  breastfeed?: { childId: string; side: 'left' | 'right'; start: ISODateTime };
+  /** A breastfeed session (S07): seconds already counted per side, plus the side running now, if any. */
+  breastfeed?: {
+    childId: string;
+    sessionStart: ISODateTime;
+    leftSec: number;
+    rightSec: number;
+    running?: { side: 'left' | 'right'; start: ISODateTime };
+  };
+}
+
+/** PRD-ADDITION (B16): a vaccine marked done. Absent means "Not yet". */
+export interface VaccineRecord {
+  childId: string;
+  vaccineId: string;
+  doneOn: ISODate;
 }
 
 export interface DomainState {
@@ -212,6 +229,16 @@ export interface DomainState {
   appointments: Appointment[];
   history: ArchivedPregnancy[];
   timers: RunningTimers;
+  /** PRD-ADDITION (B35, B34): app settings. */
+  settings?: {
+    insightFrequency: 'fewer' | 'standard';
+    notifications: { doses: boolean; tins: boolean; insights: boolean };
+    sharing: { feeds: boolean; appointments: boolean; me: boolean };
+  };
+  /** PRD-ADDITION (B12): foods she typed that are not in the catalogue, id to name. */
+  customFoods?: Record<string, string>;
+  /** PRD-ADDITION (B16). Optional so state saved before it existed still loads. */
+  vaccinations?: VaccineRecord[];
   /** Snoozes and acknowledgements keyed by insight id (11.1, 11.3). */
   insightMemory: Record<string, { snoozedUntil?: ISODateTime; acknowledgedAt?: ISODateTime }>;
   /** Contextual cards that are snoozed or pending (9.7 "Finish your birth details", 9.8 "Not yet"). */

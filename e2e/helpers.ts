@@ -26,7 +26,9 @@ export async function expectTapTargets(page: Page, scope = '#device main') {
   const small = await page.evaluate((sel) => {
     const out: string[] = [];
     document.querySelectorAll(`${sel} button, ${sel} a, ${sel} input, ${sel} [role="checkbox"]`).forEach((el) => {
-      const r = el.getBoundingClientRect();
+      // A checkbox or radio inside a <label> is tapped through the whole label.
+      const hit = el.tagName === 'INPUT' && el.closest('label') ? el.closest('label')! : el;
+      const r = hit.getBoundingClientRect();
       if (!r.width || !r.height) return;
       const after = getComputedStyle(el, '::after');
       const aw = after.content !== 'none' ? parseFloat(after.width) || 0 : 0;

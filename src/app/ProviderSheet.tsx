@@ -12,13 +12,17 @@ import { useDomain } from '../state/store';
  * Labour mode's persistent "Call your provider". Always names a human.
  */
 
-const Ctx = createContext<() => void>(() => {});
+const Ctx = createContext<(kind?: 'provider' | 'support') => void>(() => {});
 
 const callCls = 'flex h-14 w-full items-center justify-center rounded-pill font-sans text-[16px] font-semibold';
 
 export function ProviderSheetProvider({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
-  const show = useCallback(() => setOpen(true), []);
+  const [support, setSupport] = useState(false);
+  const show = useCallback((kind: 'provider' | 'support' = 'provider') => {
+    setSupport(kind === 'support');
+    setOpen(true);
+  }, []);
   const state = useDomain();
   const markers = useReviewMarkers();
   const provider = state.her.provider;
@@ -40,6 +44,11 @@ export function ProviderSheetProvider({ children }: { children: ReactNode }) {
             <p className="type-body text-ink-2">{S.providerNoNumber.text}</p>
           )}
           <div className="h-px bg-line" />
+          {support ? (
+            <a href={`tel:${SUPPORT.mentalHealth.number}`} className={`${callCls} border border-ink-faint text-ink`}>
+              {SUPPORT.mentalHealth.label} · {fmt(S.providerEmergencyCall, { number: SUPPORT.mentalHealth.number })}
+            </a>
+          ) : null}
           <a href={`tel:${SUPPORT.emergency.number}`} className={`${callCls} border border-ink-faint text-ink`}>
             {S.providerEmergency.text} · {fmt(S.providerEmergencyCall, { number: SUPPORT.emergency.number })}
           </a>

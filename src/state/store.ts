@@ -70,7 +70,13 @@ export const useWeave = create<WeaveStore>()(
     }),
     {
       name: STORAGE_KEY,
-      version: 1,
+      version: 2,
+      // v2 added vaccinations; earlier saves load with an empty list.
+      migrate: (persisted, from) => {
+        const p = persisted as { domain?: DomainState };
+        if (from < 2 && p.domain) p.domain = { ...p.domain, vaccinations: p.domain.vaccinations ?? [] };
+        return p as never;
+      },
       storage: createJSONStorage(() => localStorage),
       partialize: (s) => ({ domain: s.domain, personaId: s.personaId, clockOffsetMs: s.clockOffsetMs, demo: { ...s.demo, panelOpen: false } }),
       onRehydrateStorage: () => (s) => {

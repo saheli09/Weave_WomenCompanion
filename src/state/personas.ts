@@ -64,6 +64,39 @@ function seedHerShortNights(b: ReturnType<typeof builder>, hours: number[]) {
   });
 }
 
+/**
+ * Seven earlier days of routine logs so the Baby tab trends and R06 have a
+ * baseline. Deterministic: the same persona always gets the same history.
+ */
+function seedHistory(b: ReturnType<typeof builder>, childId: string, kind: 'newborn' | 'infant' | 'toddler', days = 7) {
+  const c = b.child(childId);
+  for (let d = 1; d <= days; d++) {
+    if (kind === 'toddler') {
+      b.log(c, b.at(d, 8, 0), { type: 'feed', mode: 'solids', slot: 'breakfast', foodIds: d % 2 ? ['ragi', 'banana'] : ['egg', 'tomato'] }, 'sheet');
+      b.log(c, b.at(d, 12, 45), { type: 'feed', mode: 'solids', slot: 'lunch', foodIds: d % 3 ? ['rice', 'dal', 'carrot'] : ['rice', 'chicken', 'potato'] }, 'sheet');
+      b.log(c, b.at(d, 19, 15), { type: 'feed', mode: 'solids', slot: 'dinner', foodIds: ['rice', 'dal', 'onion'] }, 'sheet');
+      b.log(c, b.at(d, 21, 0), { type: 'feed', mode: 'bottle', ml: 180, content: 'formula' }, 'sheet');
+      [7, 11, 15, 19].forEach((h) => b.log(c, b.at(d, h, 10), { type: 'diaper', kind: h === 11 ? 'dirty' : 'wet' }));
+      b.log(c, b.at(d, 15, 0), { type: 'sleep', start: iso(b.at(d, 13, 30)), end: iso(b.at(d, 15, 0)) }, 'timer');
+      // Night sleep that ended on the morning of day d (never touches today).
+      b.log(c, b.at(d, 6, 30 + (d % 3) * 10), { type: 'sleep', start: iso(b.at(d + 1, 20, 40)), end: iso(b.at(d, 6, 30 + (d % 3) * 10)) }, 'timer');
+      continue;
+    }
+    const gapH = kind === 'newborn' ? 3 : 3.5;
+    for (let h = 1.5, i = 0; h < 24; h += gapH, i++) {
+      const hh = Math.floor(h);
+      const mm = Math.round((h - hh) * 60);
+      b.log(c, b.at(d, hh, mm), { type: 'feed', mode: 'breast', side: (d + i) % 2 ? 'left' : 'right', minutes: 12 + ((d * 7 + i * 3) % 6) }, 'timer');
+    }
+    [2, 5, 8, 11, 14, 17, 20, 23].slice(0, kind === 'newborn' ? 8 : 6).forEach((h, i) => b.log(c, b.at(d, h, 20), { type: 'diaper', kind: i % 3 === 1 ? 'both' : 'wet' }));
+    // Naps of about 1h 40m in the day, and a longer night stretch.
+    [[8, 0], [11, 15], [14, 30], [17, 30]].forEach(([h, m]) => {
+      const start = b.at(d, h!, m!);
+      b.log(c, new Date(start.getTime() + 100 * 60_000), { type: 'sleep', start: iso(start), end: iso(new Date(start.getTime() + 100 * 60_000)) }, 'timer');
+    });
+  }
+}
+
 export function buildPersona(id: PersonaId, anchor: Date = ANCHOR): DomainState {
   const today = toISODate(anchor);
   const s = base();
@@ -116,6 +149,14 @@ export function buildPersona(id: PersonaId, anchor: Date = ANCHOR): DomainState 
       s.medicines = prenatalMeds().map((m) => ({ ...m, archived: true }));
       const c = b.child(childId);
       b.log(c, born, { type: 'growth', weightG: 3050 }, 'derived');
+      b.log(c, b.at(10, 11, 0), { type: 'growth', weightG: 2960, lengthCm: 49.5, headCm: 34.2 }, 'sheet');
+      b.log(c, b.at(2, 11, 0), { type: 'growth', weightG: 3240, lengthCm: 50.6, headCm: 34.9 }, 'sheet');
+      seedHistory(b, childId, 'newborn');
+      s.vaccinations = [
+        { childId, vaccineId: 'bcg', doneOn: toISODate(born) },
+        { childId, vaccineId: 'opv0', doneOn: toISODate(born) },
+        { childId, vaccineId: 'hepb1', doneOn: toISODate(born) },
+      ];
       // Today: three feeds since 5am and no water yet (R01 seed; see FIGMA-DEVIATIONS.md).
       b.log(c, b.at(0, 5, 20), { type: 'feed', mode: 'breast', side: 'right', minutes: 15 }, 'timer');
       b.log(c, b.at(0, 6, 45), { type: 'sleep', start: iso(b.at(0, 1, 35)), end: iso(b.at(0, 6, 45)) }, 'timer');
@@ -152,6 +193,9 @@ export function buildPersona(id: PersonaId, anchor: Date = ANCHOR): DomainState 
       s.her.cycle = { active: true, lastPeriodStart: periodStart, periodDays: [periodStart, addDaysISO(today, -1), today] };
       const c = b.child(childId);
       b.log(c, born, { type: 'growth', weightG: 2980 }, 'derived');
+      b.log(c, b.at(30, 11, 0), { type: 'growth', weightG: 3900, lengthCm: 53.5, headCm: 36.6 }, 'sheet');
+      seedHistory(b, childId, 'infant');
+      s.vaccinations = ['bcg', 'opv0', 'hepb1'].map((vaccineId) => ({ childId, vaccineId, doneOn: toISODate(born) }));
       b.log(b.her, b.at(2, 8, 0), { type: 'period', flow: 'medium', event: 'start' }, 'sheet');
       b.log(b.her, b.at(1, 8, 0), { type: 'period', flow: 'medium', event: 'day' }, 'sheet');
       b.log(b.her, b.at(0, 8, 15), { type: 'period', flow: 'light', event: 'day' }, 'sheet');
@@ -176,6 +220,14 @@ export function buildPersona(id: PersonaId, anchor: Date = ANCHOR): DomainState 
       s.her.units = { volume: 'oz', weight: 'kg' }; // the toddler Figma frame shows "7oz"
       const c = b.child(childId);
       b.log(c, born, { type: 'growth', weightG: 3100 }, 'derived');
+      // Monthly weights: the child's own trajectory (no reference band; 9.12).
+      [[1, 4100, 54], [2, 5000, 57.5], [4, 6300, 62], [6, 7200, 65.5], [9, 8100, 70], [12, 8900, 74]].forEach(([mo, g, cm]) => {
+        const at = new Date(born);
+        at.setMonth(at.getMonth() + mo!);
+        b.log(c, at, { type: 'growth', weightG: g, lengthCm: cm }, 'sheet');
+      });
+      seedHistory(b, childId, 'toddler');
+      s.vaccinations = ['bcg', 'opv0', 'hepb1', 'penta1', 'opv1', 'rota1', 'pcv1', 'penta2', 'opv2', 'rota2', 'penta3', 'opv3', 'rota3', 'pcv2', 'ipv1', 'mr1', 'pcv-b', 'je1'].map((vaccineId) => ({ childId, vaccineId, doneOn: '2025-12-01' }));
       // Foods introduced earlier with no reaction; curd introduced today (R07).
       const intro = (foodId: string, daysAgo: number, reaction: FoodIntroduction['reaction'] = 'none', allergenGroup?: string): FoodIntroduction => ({
         foodId, childId, firstOn: addDaysISO(today, -daysAgo), reaction, allergenGroup,
