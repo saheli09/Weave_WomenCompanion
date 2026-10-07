@@ -599,7 +599,7 @@ Empty, populated, long content, first-use, offline (everything is local), and re
 | R01 | both | Three or more feeds since early morning and no water logged | "Three feeds logged since 5am, and no water yet today." | Log a glass |
 | R02 | her | Below half of water goal by mid-afternoon | Observation of the count | Log a glass |
 | R03 | her | Period active, day 1 to 3 | Hydration note tied to period | Log a glass |
-| R04 | her | Bleeding trending down over three days | "Spotting has eased for three days." plus "Week N usually looks like this." | none |
+| R04 | her | Bleeding trending down over three days | "Spotting has eased for three days." (observation only; no line about what a week "usually" looks like) | none |
 | R05 | her | Under six hours sleep four nights in a row | "You've slept under six hours four nights running." plus "Nothing to do with this. Just worth knowing." | none |
 | R06 | child | Nap length or feed gap differs from the child's own recent average | Compare to her own history only | none |
 | R07 | child | First-time food logged | "X introduced today. No reaction yet." | Log a reaction / Not now |
@@ -760,7 +760,7 @@ Record (locally, no external analytics) time-to-log per action and number of tap
 ## Appendix A: Copy bank (seed examples that pass the rules)
 - "Three feeds logged since 5am, and no water yet today."
 - "You've slept under six hours four nights running. Nothing to do with this. Just worth knowing."
-- "Spotting has eased for three days. Week seven usually looks like this."
+- "Spotting has eased for three days."
 - "Your practice contractions moved from eleven minutes apart to seven over the last two days. Not a signal on its own. Timing them properly is one tap away."
 - "Curd introduced today. No reaction yet."
 - "Ingredients already introduced safely."
