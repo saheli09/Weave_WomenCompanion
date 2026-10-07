@@ -4,8 +4,9 @@ import { TEMPLATES, type TemplateKey } from './templates';
 
 /**
  * Insight engine, PRD 11.1. Deterministic rules over local state; no LLM.
- * Rules return candidates; the engine filters snoozed ones, ranks escalations
- * first, then by priority and recency, and caps the carousel at four.
+ * Rules return candidates; the engine filters snoozed ones, ranks them by
+ * urgency (escalations, then time-limited cards, then the rest; newest first
+ * within a group) and caps the carousel at four.
  */
 
 export interface InsightContext {
@@ -19,8 +20,13 @@ export interface Candidate {
   template: TemplateKey;
   scope: Insight['scope'];
   params?: Record<string, string | number>;
-  /** Higher shows first among info cards. */
+  /** Breaks ties within an urgency group; also what "Fewer" settings keep. */
   priority: number;
+  /**
+   * Has a deadline she can miss: a formula tin within seven days of its discard
+   * date or past it, an open reaction window. Ranks above other info cards.
+   */
+  timeLimited?: boolean;
   /** When the triggering data happened; newer wins ties. */
   at: ISODateTime;
   /** Effect ids handled by the UI layer, e.g. "log_water", "close_tin:tin_1:finished". */
@@ -80,6 +86,17 @@ export function render(c: Candidate, memory: DomainState['insightMemory']): Rend
   };
 }
 
+/** 0 = escalation, 1 = time-limited, 2 = everything else. */
+export const urgencyGroup = (c: Candidate): number => (TEMPLATES[c.template].severity === 'escalate' ? 0 : c.timeLimited ? 1 : 2);
+
+/** Urgency group first; within a group, newest first, then priority. */
+export function byUrgency(a: Candidate, b: Candidate): number {
+  const g = urgencyGroup(a) - urgencyGroup(b);
+  if (g) return g;
+  if (a.at !== b.at) return a.at < b.at ? 1 : -1;
+  return b.priority - a.priority;
+}
+
 export function runInsights(rules: Rule[], ctx: InsightContext): RenderedInsight[] {
   const memory = ctx.state.insightMemory;
   const t = ctx.now.getTime();
@@ -102,13 +119,7 @@ export function runInsights(rules: Rule[], ctx: InsightContext): RenderedInsight
     if (escalate) return true;
     return !(m?.snoozedUntil && new Date(m.snoozedUntil).getTime() > t);
   });
-  visible.sort((a, b) => {
-    const ea = TEMPLATES[a.template].severity === 'escalate' ? 1 : 0;
-    const eb = TEMPLATES[b.template].severity === 'escalate' ? 1 : 0;
-    if (ea !== eb) return eb - ea;
-    if (a.priority !== b.priority) return b.priority - a.priority;
-    return a.at < b.at ? 1 : -1;
-  });
+  visible.sort(byUrgency);
   // Per-rule cap: one card per rule id at a time (11.1 frequency cap).
   const seen = new Set<string>();
   const capped = visible.filter((c) => {

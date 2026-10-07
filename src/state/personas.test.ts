@@ -1,6 +1,6 @@
 import { checkInvariants } from '../domain/transitions';
 import { deriveTodayState, postpartumLabel, currentPeriodDay, deriveStage, usesFormula } from '../domain/stage';
-import { formatChildAge, formulaDaysLeft, pregnancyWeek } from '../domain/dates';
+import { childAge, formatChildAge, formulaDaysLeft, pregnancyWeek } from '../domain/dates';
 import { ANCHOR, buildPersona, PERSONAS } from './personas';
 
 describe('seed personas (3.3) on one timeline', () => {
@@ -58,5 +58,40 @@ describe('seed personas (3.3) on one timeline', () => {
     expect(pregnancyWeek(s.her.pregnancy!.dueDate, ANCHOR).week).toBe(16);
     expect(deriveTodayState(s, ANCHOR)).toBe('pregnancy_with_child');
     expect(s.her.cycle.active).toBe(false);
+  });
+});
+
+describe('seeds follow the demo clock (D1 to D6)', () => {
+  const TIMES = [
+    new Date(2026, 7, 27, 3, 0), // small hours on the anchor day
+    new Date(2026, 7, 27, 22, 45),
+    new Date(2026, 7, 29, 10, 30), // two days on: the "47h since last meal" case
+    new Date(2026, 9, 7, 15, 5),
+    new Date(2027, 0, 1, 0, 20), // across a year boundary
+  ];
+  const cases = PERSONAS.flatMap((p) => TIMES.map((t) => [p.id, t] as const));
+
+  it.each(cases)('%s at %s: valid, nothing in the future, same gaps as at the anchor', (id, at) => {
+    const s = buildPersona(id, at);
+    expect(checkInvariants(s)).toEqual([]);
+    expect(s.logs.filter((l) => new Date(l.at) > at)).toEqual([]);
+    // Everything moves together: the newest log is as recent as it is at the anchor.
+    const newest = (st: typeof s, now: Date) => now.getTime() - Math.max(...st.logs.map((l) => new Date(l.at).getTime()));
+    expect(newest(s, at)).toBe(newest(buildPersona(id), ANCHOR));
+  });
+
+  it.each(TIMES)('D5 at %s: last meal 15 minutes ago, same age, period day 3, tin five days out', (at) => {
+    const s = buildPersona('D5', at);
+    const feeds = s.logs.filter((l) => l.type === 'feed').map((l) => new Date(l.at).getTime());
+    expect((at.getTime() - Math.max(...feeds)) / 60_000).toBe(15);
+    // Same age in days; the "1y 2m 20d" reading can move a day with month lengths.
+    expect(childAge(s.children[0]!.dob, at).totalDays).toBe(childAge(buildPersona('D5').children[0]!.dob, ANCHOR).totalDays);
+    expect(currentPeriodDay(s, at)).toBe(3);
+    expect(formulaDaysLeft(s.formulaPacks[0]!.discardBy, at)).toBe(5);
+  });
+
+  it.each(TIMES)('D1 at %s: still week 22, still eighteen weeks to go', (at) => {
+    const s = buildPersona('D1', at);
+    expect(pregnancyWeek(s.her.pregnancy!.dueDate, at).week).toBe(22);
   });
 });

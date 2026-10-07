@@ -62,24 +62,44 @@ export function InsightCard({ insight, compact = false, ...h }: { insight: Rende
         ) : null}
         <Reviews insight={insight} />
       </div>
-      {primary || hasNotNow ? (
-        <div className="flex flex-wrap items-center gap-4">
-          {primary ? (
-            <PrimaryButton tone="sage" onClick={() => h.onAction(insight, primary.effect)}>
-              {primary.label}
-            </PrimaryButton>
-          ) : null}
-          {insight.actions
-            .filter((a) => a !== primary && a.label !== S.notNow.text)
-            .map((a) => (
-              <TextAction key={a.label} onClick={() => h.onAction(insight, a.effect)}>
-                {a.label}
-              </TextAction>
-            ))}
-          {hasNotNow && primary ? <TextAction onClick={() => h.onNotNow(insight)}>{S.notNow.text}</TextAction> : null}
-        </div>
-      ) : null}
+      {primary || hasNotNow ? <InsightActions insight={insight} primary={primary} hasNotNow={hasNotNow} {...h} /> : null}
     </article>
+  );
+}
+
+/**
+ * One secondary action sits beside the primary button. With two or more, the
+ * text actions get their own row under it, so none wraps onto a line alone.
+ */
+function InsightActions({ insight, primary, hasNotNow, ...h }: { insight: RenderedInsight; primary?: RenderedInsight['actions'][number]; hasNotNow: boolean } & InsightHandlers) {
+  const secondary = [
+    ...insight.actions
+      .filter((a) => a !== primary && a.label !== S.notNow.text)
+      .map((a) => (
+        <TextAction key={a.label} onClick={() => h.onAction(insight, a.effect)}>
+          {a.label}
+        </TextAction>
+      )),
+    ...(hasNotNow && primary ? [<TextAction key="not-now" onClick={() => h.onNotNow(insight)}>{S.notNow.text}</TextAction>] : []),
+  ];
+  const button = primary ? (
+    <PrimaryButton tone="sage" onClick={() => h.onAction(insight, primary.effect)}>
+      {primary.label}
+    </PrimaryButton>
+  ) : null;
+  if (secondary.length < 2) {
+    return (
+      <div className="flex flex-wrap items-center gap-4">
+        {button}
+        {secondary}
+      </div>
+    );
+  }
+  return (
+    <div className="flex flex-col items-start gap-3">
+      {button}
+      <div className="flex flex-wrap items-center gap-6">{secondary}</div>
+    </div>
   );
 }
 

@@ -91,12 +91,12 @@ test('Phase 1 acceptance: tin reminders at 7 days, on, and after the discard dat
   await start(page, 'D5'); // tin opened 18 July, discard by 1 September
   const device = page.locator('#device');
   await setClock(page, '2026-08-25T09:00');
-  await expect(device.getByText('The formula tin opened on 18 July is due to be discarded by 1 September.')).toBeVisible();
-  await expect(device.getByText('Seven days left.')).toBeVisible();
+  await expect(device.getByText('The open formula tin is due to be discarded by 1 September.')).toBeVisible();
+  await expect(device.getByText('Opened 18 July. Seven days left.')).toBeVisible();
   await setClock(page, '2026-09-01T09:00');
-  await expect(device.getByText('Discard date for the open tin is today.')).toBeVisible();
+  await expect(device.getByText('The open formula tin is due to be discarded today.')).toBeVisible();
   await setClock(page, '2026-09-03T09:00');
-  const late = device.getByText('The tin opened on 18 July has passed its discard date.');
+  const late = device.getByText('The open formula tin has passed its discard date.');
   await expect(late).toBeVisible();
   await device.getByRole('button', { name: 'Not now' }).first().click();
   await expect(late).toHaveCount(0);

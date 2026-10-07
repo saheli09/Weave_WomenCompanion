@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useId, useState, type ReactNode } from 'react';
 import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { S } from '../../content/strings';
 import { fmt } from '../../content/copy';
@@ -12,10 +12,11 @@ import { ContextCard, ListCard, ListRow, Section } from '../../components/Cards'
 import { FilterChip, SubjectChip } from '../../components/Chip';
 import { GhostButton, PrimaryButton, SecondaryButton, TextAction } from '../../components/Button';
 import { EmptyState } from '../../components/States';
+import { Chevron, Icon } from '../../components/Icon';
 import { Field, fieldCls, FieldError } from '../../components/Form';
 import { ReviewFlag, ReviewTag, useReviewMarkers } from '../../components/ReviewFlag';
 import { capitalise, formatDayMonth, formatTimeCompact, parseDate, toISODate } from '../../domain/dates';
-import { EMERGENCY_SYMPTOMS, logReaction, logSolids, reactionStatus, REACTION_SYMPTOMS, slotForTime, suggestMeal } from '../../domain/food';
+import { EMERGENCY_SYMPTOMS, logReaction, logSolids, reactionStatus, REACTION_SYMPTOMS, nextMeal, planDay, slotForTime, type MealPlanSlot } from '../../domain/food';
 import type { Child, DomainState, LogEntry, MealSlot, ReactionSeverity, ReactionStatus } from '../../domain/types';
 import { useDomain, useWeave } from '../../state/store';
 import { now as clockNow, useNow } from '../../state/clock';
@@ -161,28 +162,91 @@ function SolidsSheet({ child, onClose }: { child: Child; onClose: () => void }) 
 
 /* --------------------------------------------- Today: meal card and R07 */
 
-/** Today's meal card (S02, R08): a white card, not sage, as designed. */
+/**
+ * Today's meal card (S02, R08): a white card, not sage, as designed. It leads
+ * with the next meal as in the frame. The other three slots of the day open
+ * under it on demand (design addition): what was logged, or a suggestion.
+ */
 export function MealCard({ state, now, child }: { state: DomainState; now: Date; child: Child }) {
   const navigate = useNavigate();
-  const { slot, recipe } = suggestMeal(state, child.id, now);
-  if (!recipe)
-    return (
-      <ContextCard
-        tag={fmt(S.mealCardTag, { slot })}
-        title={S.mealNone.text}
-        titleStyle="prompt"
-        actions={<GhostButton onClick={() => navigate('/baby/food')}>{S.mealNoneLink.text}</GhostButton>}
-      />
-    );
+  const markers = useReviewMarkers();
+  const plan = planDay(state, child.id, now);
+  const lead = nextMeal(plan, now);
+  const rest = plan.filter((p) => p !== lead);
+  const open = (p: MealPlanSlot) => navigate(`/food/recipe/${p.recipe!.id}?slot=${p.slot}`);
+  const [expanded, setExpanded] = useState(false);
+  const listId = useId();
+  // Compact (about a quarter of the screen): the recipe link sits on the name row and
+  // "All meals today" is a quiet link, so the child and Me cards stay on the first screen.
   return (
-    <ContextCard
-      tag={fmt(S.mealCardTag, { slot })}
-      title={recipe.name}
-      body={S.mealSafeLine.text}
-      review={RECIPE_REVIEW}
-      actions={<GhostButton onClick={() => navigate(`/food/recipe/${recipe.id}?slot=${slot}`)}>{S.mealViewRecipe.text}</GhostButton>}
-    />
+    <ReviewFlag review={RECIPE_REVIEW} className="rounded-card">
+      <article data-testid="meal-card" className="flex w-full flex-col gap-2 rounded-card bg-surface p-5">
+        <div className="flex items-center gap-1.5">
+          <span aria-hidden className="size-1.5 rounded-full bg-ink-3" />
+          <span className="type-micro text-ink-2">{lead ? fmt(S.mealCardTag, { slot: lead.slot }) : S.mealsCardTag.text}</span>
+        </div>
+        {lead?.recipe ? (
+          <div className="flex flex-col gap-1">
+            <div className="flex items-baseline justify-between gap-3">
+              <h3 className="type-insight min-w-0 text-ink">{lead.recipe.name}</h3>
+              <MealLink onClick={() => open(lead)} className="text-ink-2">
+                {S.mealViewRecipe.text}
+              </MealLink>
+            </div>
+            <div className="type-secondary text-ink-3">{S.mealSafeLine.text}</div>
+          </div>
+        ) : lead ? (
+          <div className="flex items-baseline justify-between gap-3">
+            <h3 className="type-prompt min-w-0 text-ink">{S.mealNone.text}</h3>
+            <MealLink onClick={() => navigate('/baby/food')} className="text-ink-2">
+              {S.mealNoneLink.text}
+            </MealLink>
+          </div>
+        ) : null}
+        {lead ? (
+          <MealLink aria-expanded={expanded} aria-controls={listId} onClick={() => setExpanded((e) => !e)} className="self-start text-ink-3">
+            {expanded ? S.mealsHide.text : S.mealsShowAll.text}
+            <Chevron className={`transition-transform ${expanded ? '-rotate-90' : 'rotate-90'}`} />
+          </MealLink>
+        ) : null}
+        {expanded || !lead ? (
+          <div id={listId} className="flex flex-col gap-1">
+            {markers ? (
+              <span>
+                <ReviewTag review={S.mealsShowAll.review!} />
+              </span>
+            ) : null}
+            <ul className="flex flex-col [&>li+li]:border-t [&>li+li]:border-line">
+              {rest.map((p) => (
+                <MealRow key={p.slot} plan={p} state={state} onOpen={() => open(p)} />
+              ))}
+            </ul>
+          </div>
+        ) : null}
+      </article>
+    </ReviewFlag>
   );
+}
+
+/** Quiet text link for the meal card: no border, 44px hit area through hit-44. */
+function MealLink({ className = '', children, ...rest }: React.ButtonHTMLAttributes<HTMLButtonElement>) {
+  return (
+    <button type="button" className={`hit-44 inline-flex shrink-0 items-center gap-1 whitespace-nowrap font-sans text-[13px] font-semibold active:opacity-70 ${className}`} {...rest}>
+      {children}
+    </button>
+  );
+}
+
+function MealRow({ plan, state, onOpen }: { plan: MealPlanSlot; state: DomainState; onOpen: () => void }) {
+  const meta = SLOTS.find((s) => s.value === plan.slot)!;
+  const leading = <Icon name={meta.icon} size={24} />;
+  if (plan.fed) {
+    const food = plan.recipe?.name ?? capitalise(plan.fed.foodIds.map((id) => foodName(id, state.customFoods)).join(', '));
+    const time = formatTimeCompact(plan.fed.at);
+    return <ListRow leading={leading} label={food} sublabel={meta.label} value={time} />;
+  }
+  if (!plan.recipe) return <ListRow leading={leading} label={S.mealRowNone.text} sublabel={meta.label} muted />;
+  return <ListRow leading={leading} label={plan.recipe.name} sublabel={meta.label} chevron onClick={onOpen} a11yLabel={fmt(S.mealRowA11y, { slot: meta.label, recipe: plan.recipe.name })} />;
 }
 
 /** First-food prompt (R07, 9.9): stays 72 hours or until "Not now" (24 hours), then retires into the journal. */

@@ -1,5 +1,7 @@
 import { buildPersona, ANCHOR } from '../state/personas';
-import { acknowledgeInsight, runInsights, snoozeInsight, type Rule } from './engine';
+import { acknowledgeInsight, byUrgency, runInsights, snoozeInsight, type Rule } from './engine';
+import { RULES } from './rules';
+import { closeFormulaPack } from '../domain/transitions';
 
 const ctx = () => ({ state: buildPersona('D3'), now: ANCHOR });
 const rule = (id: string, cands: Parameters<Rule['evaluate']> extends never ? never : ReturnType<Rule['evaluate']>): Rule => ({ id, evaluate: () => cands });
@@ -7,14 +9,44 @@ const rule = (id: string, cands: Parameters<Rule['evaluate']> extends never ? ne
 describe('insight engine ranking (11.1)', () => {
   const info = (id: string, template: 'R02' | 'R05' | 'R10' | 'R16' | 'R04', priority: number, at = ANCHOR.toISOString()) => ({ id, template, scope: 'her' as const, priority, at });
 
-  it('puts escalations first, then priority, then recency, capped at four', () => {
+  it('ranks by urgency: escalations, then time-limited cards, then the rest; newest first within a group; capped at four', () => {
     const rules = [
-      rule('a', [info('R02', 'R02', 1), info('R05', 'R05', 5), info('R10', 'R10', 3), info('R16', 'R16', 3, '2026-08-27T11:00:00.000Z'), info('R04', 'R04', 2)]),
-      rule('b', [{ id: 'R14:x', template: 'R14', scope: 'her', priority: 0, at: ANCHOR.toISOString() }]),
+      rule('a', [
+        info('R05', 'R05', 9, '2026-08-27T05:00:00.000Z'),
+        info('R10', 'R10', 1, '2026-08-27T04:00:00.000Z'),
+        { ...info('R16', 'R16', 1, '2026-08-20T00:00:00.000Z'), timeLimited: true },
+        info('R02', 'R02', 5, '2026-08-27T03:00:00.000Z'),
+      ]),
+      rule('b', [{ id: 'R14:x', template: 'R14', scope: 'her', priority: 0, at: '2026-08-26T00:00:00.000Z' }]),
     ];
     const out = runInsights(rules, ctx());
-    expect(out.map((i) => i.id)).toEqual(['R14:x', 'R05', 'R16', 'R10']);
+    // The tin card is the oldest and lowest priority, yet it outranks every untimed card.
+    expect(out.map((i) => i.id)).toEqual(['R14:x', 'R16', 'R05', 'R10']);
     expect(out[0]!.severity).toBe('escalate');
+  });
+
+  it('within a group, ties on time fall back to priority', () => {
+    const rules = [rule('a', [info('R02', 'R02', 1), info('R05', 'R05', 5)])];
+    expect(runInsights(rules, ctx()).map((i) => i.id)).toEqual(['R05', 'R02']);
+  });
+
+  it('two time-limited cards: the newer one first', () => {
+    const older = { ...info('R17', 'R16', 9, '2026-08-01T00:00:00.000Z'), timeLimited: true };
+    const newer = { ...info('R16', 'R16', 1, '2026-08-25T00:00:00.000Z'), timeLimited: true };
+    expect([older, newer].sort(byUrgency).map((c) => c.id)).toEqual(['R16', 'R17']);
+  });
+
+  it('D5: the formula reminder is the first card she sees, and leaves once the tin is closed', () => {
+    const s = buildPersona('D5');
+    const first = runInsights(RULES, { state: s, now: ANCHOR })[0]!;
+    expect(first.ruleId).toBe('R16');
+    const closed = closeFormulaPack(s, 'tin_1', 'finished', ANCHOR);
+    expect(runInsights(RULES, { state: closed, now: ANCHOR }).some((i) => i.ruleId === 'R16' || i.ruleId === 'R17')).toBe(false);
+  });
+
+  it('D5: past the discard date the overdue card (R17) still ranks above everything untimed', () => {
+    const later = new Date(ANCHOR.getTime() + 7 * 864e5);
+    expect(runInsights(RULES, { state: buildPersona('D5'), now: later })[0]!.ruleId).toBe('R17');
   });
 
   it('"Not now" hides an info card for 24 hours, then it can return', () => {

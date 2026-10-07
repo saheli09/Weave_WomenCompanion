@@ -1,11 +1,12 @@
-import { addDaysISO, formulaDiscardBy, toISODate } from '../domain/dates';
+import { addDaysISO, calendarDaysBetween, formulaDiscardBy, toISODate } from '../domain/dates';
 import type { DomainState, FoodIntroduction, LogEntry, LogPayload, Medicine, Subject } from '../domain/types';
 import { emptyState, iso } from '../domain/transitions';
 
 /**
- * Seed personas D1 to D6 (PRD 3.3). One timeline: every persona is seen on the
- * demo anchor, Thursday 27 August 2026, 10:30 (17.1 #3 resolution). All dates
- * are derived from the anchor so the demo clock can move without breaking them.
+ * Seed personas D1 to D6 (PRD 3.3). Each persona is written once against the
+ * demo anchor, Thursday 27 August 2026, 10:30 (17.1 #3 resolution), then moved
+ * to the demo clock's current time when it is loaded (`buildPersona(id, now)`),
+ * so the last feed is minutes ago, not days, whatever time the clock shows.
  */
 
 export const ANCHOR = new Date(2026, 7, 27, 10, 30, 0); // months are 0-based: 7 = August
@@ -97,7 +98,34 @@ function seedHistory(b: ReturnType<typeof builder>, childId: string, kind: 'newb
   }
 }
 
-export function buildPersona(id: PersonaId, anchor: Date = ANCHOR): DomainState {
+/**
+ * A persona as it looks at `at`: built at the anchor, then every timestamp moves
+ * by the same amount and every calendar date by the same number of days. Gaps
+ * between logs, ages and days-left counts stay exactly as designed.
+ */
+export function buildPersona(id: PersonaId, at: Date = ANCHOR): DomainState {
+  const s = buildAtAnchor(id);
+  const ms = at.getTime() - ANCHOR.getTime();
+  if (!ms) return s;
+  return shiftDates(s, ms, calendarDaysBetween(ANCHOR, at));
+}
+
+const DATE_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
+const DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+function shiftDates<T>(value: T, ms: number, days: number): T {
+  if (typeof value === 'string') {
+    if (DATE_TIME.test(value)) return new Date(new Date(value).getTime() + ms).toISOString() as T;
+    if (DATE.test(value)) return addDaysISO(value, days) as T;
+    return value;
+  }
+  if (Array.isArray(value)) return value.map((v) => shiftDates(v, ms, days)) as T;
+  if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, shiftDates(v, ms, days)])) as T;
+  return value;
+}
+
+function buildAtAnchor(id: PersonaId): DomainState {
+  const anchor = ANCHOR;
   const today = toISODate(anchor);
   const s = base();
   const b = builder(anchor, s);

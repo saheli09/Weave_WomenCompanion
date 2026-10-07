@@ -129,18 +129,28 @@ describe('R16 and R17: formula tin reminders (9.15)', () => {
   it('seven days before, three days before and on the day, with the day count', () => {
     const s = buildPersona('D5');
     expect(R16.evaluate({ state: s, now: day(-3) })).toEqual([]); // eight days left
-    expect(runInsights([R16], { state: s, now: day(-2) })[0]!.body).toBe('Seven days left.');
+    expect(runInsights([R16], { state: s, now: day(-2) })[0]!.body).toBe('Opened 18 July. Seven days left.');
     const [i] = runInsights([R16], { state: s, now: ANCHOR });
-    expect(i!.headline).toBe('The formula tin opened on 18 July is due to be discarded by 1 September.');
-    expect(i!.body).toBe('Five days left.');
-    expect(runInsights([R16], { state: s, now: day(4) })[0]!.body).toBe('One day left.');
-    expect(runInsights([R16], { state: s, now: day(5) })[0]!.headline).toBe('Discard date for the open tin is today.');
+    expect(i!.headline).toBe('The open formula tin is due to be discarded by 1 September.');
+    expect(i!.body).toBe('Opened 18 July. Five days left.');
+    expect(runInsights([R16], { state: s, now: day(2) })[0]!.body).toBe('Opened 18 July. Three days left.');
+    expect(runInsights([R16], { state: s, now: day(4) })[0]!.body).toBe('Opened 18 July. One day left.');
+    const [due] = runInsights([R16], { state: s, now: day(5) });
+    expect(due!.headline).toBe('The open formula tin is due to be discarded today.');
+    expect(due!.body).toBe('Opened 18 July.');
+  });
+  it('dates and the day count come from the tin and the clock, not fixed text', () => {
+    const s = buildPersona('D5', new Date(2026, 9, 7, 10, 30)); // same persona seeded on 7 October
+    const [i] = runInsights([R16], { state: s, now: new Date(2026, 9, 7, 10, 30) });
+    expect(i!.headline).toBe('The open formula tin is due to be discarded by 12 October.');
+    expect(i!.body).toBe('Opened 28 August. Five days left.');
   });
   it('after the date: R17 until acted on; a 24 hour snooze holds then returns', () => {
     const s = buildPersona('D5');
     expect(R16.evaluate({ state: s, now: day(6) })).toEqual([]);
     const [i] = runInsights([R17], { state: s, now: day(6) });
-    expect(i!.headline).toBe('The tin opened on 18 July has passed its discard date.');
+    expect(i!.headline).toBe('The open formula tin has passed its discard date.');
+    expect(i!.body).toBe('Opened 18 July. Due to be discarded by 1 September.');
     expect(i!.actions.map((a) => a.label)).toEqual(['Mark discarded', 'Mark finished', 'Not now']);
     const snoozed = snoozeInsight(s, i!.id, day(6));
     expect(runInsights([R17], { state: snoozed, now: day(6.5) })).toEqual([]);

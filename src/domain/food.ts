@@ -1,8 +1,8 @@
 import { differenceInHours } from 'date-fns';
 import { FOODS } from '../content/foods';
-import { RECIPES, type Recipe } from '../content/recipes';
+import { RECIPES, recipeById, type Recipe } from '../content/recipes';
 import { parseDate, toISODate } from './dates';
-import type { DomainState, FoodIntroduction, MealSlot, ReactionSeverity, ReactionStatus } from './types';
+import type { DomainState, FoodIntroduction, LogEntry, MealSlot, ReactionSeverity, ReactionStatus } from './types';
 import { addLog, TransitionError } from './transitions';
 
 /**
@@ -78,16 +78,53 @@ export function qualifyingRecipes(state: DomainState, childId: string, now: Date
   return RECIPES.filter((r) => r.slots.includes(slot) && r.ingredients.every((i) => safe.has(i)) && !recent.has(r.id));
 }
 
-/** Today's suggestion: deterministic per day so it does not change on every render. */
+export const MEAL_SLOTS: MealSlot[] = ['breakfast', 'lunch', 'snack', 'dinner'];
+
+export interface MealPlanSlot {
+  slot: MealSlot;
+  /** The suggestion, or the recipe she logged for this slot. */
+  recipe?: Recipe;
+  /** Today's solids log for this slot, if there is one. */
+  fed?: Extract<LogEntry, { type: 'feed'; mode: 'solids' }>;
+}
+
+/**
+ * Today's four meals (design addition on B13). Logged slots show what was fed;
+ * the rest get a suggestion, never the same recipe twice in a day. Deterministic
+ * per day so it does not change on every render.
+ */
+export function planDay(state: DomainState, childId: string, now: Date): MealPlanSlot[] {
+  const today = toISODate(now);
+  const solids = state.logs.filter(
+    (l): l is NonNullable<MealPlanSlot['fed']> => l.type === 'feed' && l.mode === 'solids' && l.subject.kind === 'child' && l.subject.childId === childId && toISODate(parseDate(l.at)) === today,
+  );
+  const used = new Set(solids.map((l) => l.recipeId).filter(Boolean));
+  const dayIndex = Math.floor(new Date(today).getTime() / 864e5);
+  return MEAL_SLOTS.map((slot) => {
+    const fed = solids.filter((l) => l.slot === slot).sort((a, b) => (a.at < b.at ? 1 : -1))[0];
+    if (fed) return { slot, fed, recipe: fed.recipeId ? recipeById(fed.recipeId) : undefined };
+    const options = qualifyingRecipes(state, childId, now, slot).filter((r) => !used.has(r.id));
+    if (!options.length) return { slot };
+    // Prefer the recipe with the most introduced ingredients (more variety), rotate by day among equals.
+    const top = Math.max(...options.map((r) => r.ingredients.length));
+    const best = options.filter((r) => r.ingredients.length === top);
+    const recipe = best[dayIndex % best.length]!;
+    used.add(recipe.id);
+    return { slot, recipe };
+  });
+}
+
+/** The meal the card leads with: the first slot from now on that has not been logged. */
+export function nextMeal(plan: MealPlanSlot[], now: Date): MealPlanSlot | undefined {
+  const from = MEAL_SLOTS.indexOf(slotForTime(now));
+  return plan.find((p) => MEAL_SLOTS.indexOf(p.slot) >= from && !p.fed);
+}
+
+/** The suggestion for the current time slot. */
 export function suggestMeal(state: DomainState, childId: string, now: Date): { slot: MealSlot; recipe?: Recipe } {
   const slot = slotForTime(now);
-  const options = qualifyingRecipes(state, childId, now, slot);
-  if (!options.length) return { slot };
-  const dayIndex = Math.floor(new Date(toISODate(now)).getTime() / 864e5);
-  // Prefer the recipe with the most introduced ingredients (more variety), rotate by day among equals.
-  const top = Math.max(...options.map((r) => r.ingredients.length));
-  const best = options.filter((r) => r.ingredients.length === top);
-  return { slot, recipe: best[dayIndex % best.length] };
+  const p = planDay(state, childId, now).find((x) => x.slot === slot)!;
+  return { slot, recipe: p.fed ? undefined : p.recipe };
 }
 
 /** Emergency symptoms (9.9 step 3). Selecting any of these shows the emergency card before anything is saved. */

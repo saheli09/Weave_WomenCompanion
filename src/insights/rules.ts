@@ -1,5 +1,5 @@
 import { differenceInMinutes, isSameDay, subDays } from 'date-fns';
-import { capitalise, formatDayMonth, formulaDaysLeft, numberWord, parseDate, pregnancyWeek } from '../domain/dates';
+import { addDaysISO, capitalise, formatDayMonth, formulaDaysLeft, numberWord, parseDate, pregnancyWeek } from '../domain/dates';
 import { labourStats, practiceGapsByDay } from '../domain/labour';
 import { currentPeriodDay, deriveStage } from '../domain/stage';
 import type { LogEntry } from '../domain/types';
@@ -59,7 +59,8 @@ export const R09: Rule = {
             template: 'R09',
             scope: subject.kind === 'her' ? 'her' : 'child',
             priority: 4,
-            at: due.toISOString(),
+            // "Not logged yet" is true as of now (11.1 ranking); doses keep their schedule order on ties.
+            at: now.toISOString(),
             params: { Slot: capitalise(slotWord), medicine: s.medicine.name },
             effects: [`log_dose:${s.medicine.id}:${s.slot}`],
           },
@@ -98,6 +99,15 @@ export const R13: Rule = {
   },
 };
 
+/** Her most recent log of a type, up to now (and from `since`, if given). Ranks trend cards by their data. */
+function lastLogAt(state: InsightContext['state'], now: Date, type: LogEntry['type'], since?: Date): string | undefined {
+  return state.logs
+    .filter((l) => l.type === type && l.subject.kind === 'her' && parseDate(l.at) <= now && (!since || parseDate(l.at) >= since))
+    .map((l) => l.at)
+    .sort()
+    .at(-1);
+}
+
 /** Water glasses she logged today. */
 function glassesToday(state: InsightContext['state'], now: Date): number {
   return state.logs.filter((l) => l.type === 'water' && l.subject.kind === 'her' && isSameDay(parseDate(l.at), now) && parseDate(l.at) <= now).reduce((n, l) => n + (l.type === 'water' ? l.glasses : 0), 0);
@@ -114,8 +124,8 @@ export const R01: Rule = {
     since.setHours(EARLY_MORNING_H, 0, 0, 0);
     const feeds = state.logs.filter((l) => l.type === 'feed' && l.subject.kind === 'child' && parseDate(l.at) >= since && parseDate(l.at) <= now);
     if (feeds.length < 3) return [];
-    const latest = feeds.map((f) => f.at).sort().at(-1)!;
-    return [{ id: `R01:${now.toDateString()}`, template: 'R01', scope: 'both', priority: 6, at: latest, params: { Count: capitalise(numberWord(feeds.length)), time: `${EARLY_MORNING_H}am` }, effects: ['log_water'] }];
+    // "No water yet today" is true as of now, so the card is as new as now (11.1 ranking).
+    return [{ id: `R01:${now.toDateString()}`, template: 'R01', scope: 'both', priority: 6, at: now.toISOString(), params: { Count: capitalise(numberWord(feeds.length)), time: `${EARLY_MORNING_H}am` }, effects: ['log_water'] }];
   },
 };
 
@@ -173,7 +183,9 @@ export const R16: Rule = {
         template: left === 0 ? ('R16_today' as const) : left === 1 ? ('R16_one' as const) : ('R16' as const),
         scope: 'child' as const,
         priority: left <= 3 ? 7 : 4,
-        at: now.toISOString(),
+        timeLimited: true,
+        // When it entered the seven-day window: the newest reminder ranks first.
+        at: parseDate(addDaysISO(p.discardBy, -TIN_REMINDER_DAYS)).toISOString(),
         params: { opened: formatDayMonth(p.openedOn), discardBy: formatDayMonth(p.discardBy), DaysLeft: capitalise(numberWord(left)) },
         effects: [`close_tin:${p.id}:finished`, `close_tin:${p.id}:discarded`, 'snooze'],
       })),
@@ -190,8 +202,9 @@ export const R17: Rule = {
         template: 'R17' as const,
         scope: 'child' as const,
         priority: 8,
-        at: now.toISOString(),
-        params: { opened: formatDayMonth(p.openedOn) },
+        timeLimited: true,
+        at: parseDate(p.discardBy).toISOString(),
+        params: { opened: formatDayMonth(p.openedOn), discardBy: formatDayMonth(p.discardBy) },
         effects: [`close_tin:${p.id}:discarded`, `close_tin:${p.id}:finished`, 'snooze'],
       })),
 };
@@ -277,7 +290,9 @@ export const R04: Rule = {
     if (!a || !b || !c || !before) return [];
     const recent = Math.max(LEVEL_RANK[a], LEVEL_RANK[b], LEVEL_RANK[c]);
     if (recent >= LEVEL_RANK[before] || a === 'heavy') return [];
-    return [{ id: `R04:${now.toDateString()}`, template: 'R04' as const, scope: 'her' as const, priority: 3, at: now.toISOString(), params: { Level: capitalise(a) } }];
+    // A trend: as new as the last bleeding log behind it.
+    const last = lastLogAt(state, now, 'bleeding') ?? now.toISOString();
+    return [{ id: `R04:${now.toDateString()}`, template: 'R04' as const, scope: 'her' as const, priority: 3, at: last, params: { Level: capitalise(a) } }];
   },
 };
 
@@ -297,7 +312,9 @@ export const R10: Rule = {
     const dayOfWeek = (now.getDay() + 6) % 7; // Monday 0
     const done = pelvicSetsThisWeek(state, now);
     if (dayOfWeek < 3 || done >= PELVIC_WEEKLY_TARGET) return [];
-    return [{ id: `R10:${dayStart(now, dayOfWeek).toDateString()}`, template: 'R10' as const, scope: 'her' as const, priority: 1, at: now.toISOString(), params: { done: capitalise(numberWord(done)), target: numberWord(PELVIC_WEEKLY_TARGET) }, effects: ['log_pelvic'] }];
+    // A weekly count: as new as the last set she logged, or the start of the week.
+    const last = lastLogAt(state, now, 'pelvic_floor', dayStart(now, dayOfWeek)) ?? dayStart(now, dayOfWeek).toISOString();
+    return [{ id: `R10:${dayStart(now, dayOfWeek).toDateString()}`, template: 'R10' as const, scope: 'her' as const, priority: 1, at: last, params: { done: capitalise(numberWord(done)), target: numberWord(PELVIC_WEEKLY_TARGET) }, effects: ['log_pelvic'] }];
   },
 };
 

@@ -6,7 +6,7 @@ import { milestonesForWeek } from '../../content/milestones';
 import { t, Copy } from '../../components/Copy';
 import { ScreenHeader } from '../../components/Shell';
 import { InsightCarousel } from '../../components/Insight';
-import { SubjectCard, KPIRow, Section, ListCard, ListRow, AddRow, ChecklistRow, ReadingCard, ContextCard, Avatar } from '../../components/Cards';
+import { SubjectCard, KPIRow, MoreRows, Section, ListCard, ListRow, AddRow, ChecklistRow, ReadingCard, ContextCard, Avatar } from '../../components/Cards';
 import { ActivityTimeline } from '../../components/Timeline';
 import { EmptyState, InlineUndo, useUndo } from '../../components/States';
 import { BleedingSheet, DiaperChooser } from '../quicklog/BabyLogs';
@@ -26,7 +26,7 @@ import { LabourScreen } from '../labour/Labour';
 import { useToast } from '../../app/Toast';
 import { useProviderSheet } from '../../app/ProviderSheet';
 import { useSharing } from '../settings/Settings';
-import { formatChildAge, formatDayMonth, formatDuration, formatLongDate, formatTimeCompact, numberWord, capitalise, parseDate, pregnancyWeek, minutesSince, formatTime, toISODate } from '../../domain/dates';
+import { formatChildAge, formatDayMonth, formatDuration, formatLongDate, formatTimeCompact, formatTimeSince, numberWord, capitalise, parseDate, pregnancyWeek, minutesSince, formatTime, toISODate } from '../../domain/dates';
 import { currentPeriodDay, deriveTodayState, primaryChild, STAGE_CONFIG, type TodayState } from '../../domain/stage';
 import type { Child, DomainState, Medicine } from '../../domain/types';
 import { MedicineSheet } from '../medicines/MedicineSheet';
@@ -83,15 +83,35 @@ function Compose({ state, now, todayState, insights, onFab }: { state: DomainSta
       return <LabourScreen />;
     case 'postpartum_baby':
     case 'postpartum_solids':
-    case 'toddler':
       return (
         <>
           <ScreenHeader label={date} pill={pill} title={greeting(now, state.her.name)} />
           {carousel}
           <FinishBirthDetails state={state} />
-          <CardsRow state={state} now={now} child={child} toddler={todayState === 'toddler'} />
-          {todayState === 'postpartum_solids' || todayState === 'toddler' ? <SolidsBlock state={state} now={now} child={child!} /> : null}
-          {todayState === 'toddler' ? <CourseBlock state={state} now={now} /> : null}
+          <CardsRow state={state} now={now} child={child} toddler={false} />
+          {todayState === 'postpartum_solids' ? (
+            <>
+              <MealCard state={state} now={now} child={child!} />
+              <FirstFoodPrompts state={state} now={now} child={child!} />
+            </>
+          ) : null}
+          <TodaySoFar state={state} now={now} onFab={onFab} />
+        </>
+      );
+    case 'toddler':
+      // Toddler (9.1, 17.1 #5): meals are primary, so the compact meal card comes
+      // straight after the insights, then the child and Me cards. Cards that only
+      // exist while something is active (a new-food prompt, a medicine course)
+      // sit directly under them.
+      return (
+        <>
+          <ScreenHeader label={date} pill={pill} title={greeting(now, state.her.name)} />
+          {carousel}
+          <MealCard state={state} now={now} child={child!} />
+          <FinishBirthDetails state={state} />
+          <CardsRow state={state} now={now} child={child} toddler />
+          <FirstFoodPrompts state={state} now={now} child={child!} />
+          <CourseBlock state={state} now={now} />
           <TodaySoFar state={state} now={now} onFab={onFab} />
         </>
       );
@@ -145,23 +165,56 @@ function CardsRow({ state, now, child, toddler }: { state: DomainState; now: Dat
 function ChildCard({ state, now, child, toddler, diaperOpen, onDiaper }: { state: DomainState; now: Date; child: Child; toddler: boolean; diaperOpen: boolean; onDiaper: () => void }) {
   const { openFeed } = useFeedFlow();
   const { openSleep } = useSleepFlow();
-  // 17.1 #5 resolution: at the toddler stage the card leads with meals, not milk feeds.
-  const last = toddler ? lastMeal(state, now, child) : lastFeed(state, now, child);
+  const last = lastFeed(state, now, child);
   const feeding = state.timers.breastfeed?.childId === child.id ? state.timers.breastfeed.running : undefined;
-  const value = feeding ? S.feedingNowValue.text : last ? formatDuration(minutesSince(last.at, now)) : '--';
+  // Toddler (17.1 #5, 13): a short line, "Last meal, 2h ago", from the last solids or milk log,
+  // instead of a large "since last feed" figure.
+  const toddlerLine = !feeding && toddler;
+  const value = feeding
+    ? S.feedingNowValue.text
+    : toddlerLine
+      ? last
+        ? t(S.lastMealAgo, { ago: formatTimeSince(last.at, now).toLowerCase().replace(' ', '\u00a0') }) // keeps "15m ago" on one line
+        : S.noMealYet.text
+      : last
+        ? formatDuration(minutesSince(last.at, now))
+        : '--';
   const caption = feeding
     ? t(S.feedingNowCaption, { side: feeding.side })
     : !last
-    ? (toddler ? S.noMealYet : S.noFeedYet).text
-    : toddler && last.mode === 'solids'
-      ? `${S.sinceLastMeal.text} · ${last.slot}`
-      : `${S.sinceLastFeed.text} · ${feedCaption(last, state.her.units)}`;
+      ? toddler
+        ? null
+        : S.noFeedYet.text
+      : toddler
+        ? capitalise(last.mode === 'solids' ? last.slot : feedCaption(last, state.her.units))
+        : `${S.sinceLastFeed.text} · ${feedCaption(last, state.her.units)}`;
+  const rows = (
+    <>
+      <KPIRow
+        label={S.diapers.text}
+        value={String(diapersToday(state, now, child))}
+        onAdd={onDiaper}
+        addLabel={t(S.logDiaperA11y, { name: child.name })}
+        expanded={diaperOpen}
+      />
+      <KPIRow
+        label={S.slept.text}
+        value={state.timers.sleep?.subject.kind === 'child' && state.timers.sleep.subject.childId === child.id ? S.feedingNowValue.text : formatDuration(sleptToday(state, now, { kind: 'child', childId: child.id }))}
+        onAdd={() => {
+          beginLog('today.child.sleep');
+          openSleep(child.id);
+        }}
+        addLabel={t(S.logSleepA11y, { name: child.name })}
+      />
+    </>
+  );
   return (
     <SubjectCard
       name={child.name}
       avatar={child.photo}
       kpi={{
         value,
+        style: toddlerLine ? 'text' : 'numeral',
         caption,
         onAdd: () => {
           beginLog('today.child.feed');
@@ -169,26 +222,8 @@ function ChildCard({ state, now, child, toddler, diaperOpen, onDiaper }: { state
         },
         addLabel: t(S.logFeedA11y, { name: child.name }),
       }}
-      rows={
-        <>
-          <KPIRow
-            label={S.diapers.text}
-            value={String(diapersToday(state, now, child))}
-            onAdd={onDiaper}
-            addLabel={t(S.logDiaperA11y, { name: child.name })}
-            expanded={diaperOpen}
-          />
-          <KPIRow
-            label={S.slept.text}
-            value={state.timers.sleep?.subject.kind === 'child' && state.timers.sleep.subject.childId === child.id ? S.feedingNowValue.text : formatDuration(sleptToday(state, now, { kind: 'child', childId: child.id }))}
-            onAdd={() => {
-              beginLog('today.child.sleep');
-              openSleep(child.id);
-            }}
-            addLabel={t(S.logSleepA11y, { name: child.name })}
-          />
-        </>
-      }
+      // Toddler: diaper and sleep logging collapse behind "More" (PRD 13); "+" still logs once open.
+      rows={toddler ? <MoreRows label={S.moreRows.text} lessLabel={S.lessRows.text}>{rows}</MoreRows> : rows}
     />
   );
 }
@@ -254,15 +289,6 @@ function FinishBirthDetails({ state }: { state: DomainState }) {
   const navigate = useNavigate();
   if (!state.prompts.finishBirthDetails) return null;
   return <ContextCard title={S.finishBirthTitle.text} titleStyle="prompt" body={S.finishBirthBody.text} actions={<GhostButton onClick={() => navigate('/birth')} aria-label={S.finishBirthTitle.text}>{S.open.text}</GhostButton>} />;
-}
-
-function SolidsBlock({ state, now, child }: { state: DomainState; now: Date; child: Child }) {
-  return (
-    <>
-      <MealCard state={state} now={now} child={child} />
-      <FirstFoodPrompts state={state} now={now} child={child} />
-    </>
-  );
 }
 
 function CourseBlock({ state, now }: { state: DomainState; now: Date }) {

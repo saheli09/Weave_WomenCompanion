@@ -74,6 +74,7 @@ const FLOWS: [string, string, (page: import('@playwright/test').Page) => Promise
   ['birth details', 'D2', async (p) => { await p.locator('#device').getByRole('button', { name: 'Start Labour Mode', exact: true }).click(); await p.locator('#device').getByRole('button', { name: 'Baby is here' }).click(); }],
   ['handoff', 'D2', async (p) => { await p.locator('#device').getByRole('button', { name: 'Start Labour Mode', exact: true }).click(); await p.locator('#device').getByRole('button', { name: 'Baby is here' }).click(); await p.locator('#device').getByRole('button', { name: 'Save birth' }).click(); }],
   ['reaction emergency card', 'D5', async (p) => { await p.goto('/food/reaction/curd'); await p.locator('#device').getByRole('button', { name: 'Difficulty breathing' }).click(); }],
+  ['meal card, all meals open', 'D5', async (p) => void (await p.locator('#device').getByRole('button', { name: 'All meals today' }).click())],
   ['explainer sheet', 'D3', async (p) => void (await p.locator('#device').getByRole('button', { name: 'Three feeds logged since 5am, and no water yet today.' }).click())],
   ['provider sheet', 'D2', async (p) => { await p.locator('#device').getByRole('button', { name: 'Start Labour Mode', exact: true }).click(); await p.locator('#device').getByRole('button', { name: /Call your provider/ }).click(); }],
 ];

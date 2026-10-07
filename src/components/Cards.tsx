@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import type { Review } from '../content/copy';
 import { Chevron, Plus } from './Icon';
 import { ReviewFlag, ReviewTag, useReviewMarkers } from './ReviewFlag';
@@ -29,6 +29,8 @@ export function Avatar({ src, name, size = 22 }: { src?: string; name: string; s
 
 export interface KPI {
   value: string;
+  /** "numeral" is the large KPI figure; "text" is a short serif line such as "Last meal, 2h ago". */
+  style?: 'numeral' | 'text';
   caption: ReactNode;
   onAdd?: () => void;
   addLabel?: string;
@@ -43,7 +45,7 @@ export function SubjectCard({ name, avatar, kpi, rows, className = '' }: { name:
       </div>
       <div className="flex flex-col gap-0.5 py-3">
         <div className="flex items-center justify-between">
-          <p className="type-kpi whitespace-nowrap text-ink">{kpi.value}</p>
+          {kpi.style === 'text' ? <p className="type-prompt min-w-0 text-ink">{kpi.value}</p> : <p className="type-kpi whitespace-nowrap text-ink">{kpi.value}</p>}
           {kpi.onAdd ? (
             <button type="button" onClick={kpi.onAdd} aria-label={kpi.addLabel} className="-mr-3 grid size-11 shrink-0 place-items-center text-ink-4">
               <Plus size={13} />
@@ -76,6 +78,24 @@ export function KPIRow({ label, value, muted, onAdd, addLabel, expanded }: { lab
     </button>
   ) : (
     <div className="flex min-h-[44px] w-full items-center justify-between">{content}</div>
+  );
+}
+
+/**
+ * A quiet "More" row that opens secondary KPI rows in place (PRD 13: at the
+ * toddler stage diaper and sleep logging collapse to "show more").
+ */
+export function MoreRows({ label, lessLabel, children }: { label: string; lessLabel: string; children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const id = useId();
+  return (
+    <>
+      <button type="button" aria-expanded={open} aria-controls={id} onClick={() => setOpen((o) => !o)} className="flex min-h-[44px] w-full items-center justify-between text-left">
+        <span className="type-secondary text-ink-3">{open ? lessLabel : label}</span>
+        <Chevron className={`text-ink-4 transition-transform ${open ? '-rotate-90' : 'rotate-90'}`} />
+      </button>
+      {open ? <div id={id} className="flex flex-col">{children}</div> : null}
+    </>
   );
 }
 

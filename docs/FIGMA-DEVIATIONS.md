@@ -71,3 +71,6 @@ wins for visuals, the PRD for behaviour, and conflicts are logged here.
 - Quick-log icons for Water (the Me hydration icon is reused), Bleeding, Medicine, Symptom, Weight, Note and Formula opened. These show a dashed placeholder.
 - Escalation card style (PRD 7.1 design addition).
 - Medicine add/edit sheet (B29), appointment sheet (B30), and the Symptom, Weight and Note sheets (B28), built from the existing sheet, chip and list patterns.
+- Today's meal card (S02) is compact: "View recipe" is a text link on the recipe-name row instead of a bordered button, and "All meals today" is a quiet text link that opens the other three slots as rows (what was logged, or a suggestion not repeated that day). Design addition, marked for review.
+- Toddler Today: Noticing carousel, compact meal card, then the Srinika and Me cards, then cards that exist only while active (new-food prompt, medicine course), then Today so far. The child card reads "Last meal, 15m ago" in place of the large "since last meal" figure; Diapers and Slept sit behind a "More" row (PRD 13). The Figma toddler frame shows the large figure and both rows.
+- Formula tin reminder (R16/R17) is shorter than the PRD 11.2 pattern: "The open formula tin is due to be discarded by 1 September." with "Opened 18 July. Five days left." as the muted body.

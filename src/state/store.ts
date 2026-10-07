@@ -33,14 +33,22 @@ export interface WeaveStore {
 
 export const STORAGE_KEY = 'weave-v1';
 
-function personaState(id: PersonaId) {
-  return { domain: buildPersona(id, ANCHOR), personaId: id };
+/** Seeded relative to the demo clock, so a persona always looks like it is being used right now. */
+function personaState(id: PersonaId, at: Date = now()) {
+  return { domain: buildPersona(id, at), personaId: id };
 }
+
+/**
+ * Longer than this between saves means the app was closed. The demo clock then
+ * resumes where it stopped instead of jumping ahead by real time, which would
+ * leave the seeded day looking stale ("47h since last meal").
+ */
+export const CLOCK_RESUME_AFTER_MS = 6 * 3600_000;
 
 export const useWeave = create<WeaveStore>()(
   persist(
     (set, get) => ({
-      ...personaState('D3'),
+      ...personaState('D3', ANCHOR),
       clockOffsetMs: ANCHOR.getTime() - Date.now(),
       demo: { reviewMarkers: true, panelOpen: false },
 
@@ -52,10 +60,9 @@ export const useWeave = create<WeaveStore>()(
       },
       undo: (ids) => set({ domain: ids.reduce(removeLog, get().domain) }),
 
-      loadPersona: (id) => {
-        setNow(ANCHOR);
-        set({ ...personaState(id), clockOffsetMs: getClockOffset() });
-      },
+      // The clock stays where it is; the persona is seeded around it. "Anchor" in the
+      // demo panel returns to 27 August 10:30, the time the Figma frames show.
+      loadPersona: (id) => set({ ...personaState(id), clockOffsetMs: getClockOffset() }),
       resetPersona: () => get().loadPersona(get().personaId ?? 'D3'),
       setClock: (d) => {
         setNow(d);
@@ -78,9 +85,14 @@ export const useWeave = create<WeaveStore>()(
         return p as never;
       },
       storage: createJSONStorage(() => localStorage),
-      partialize: (s) => ({ domain: s.domain, personaId: s.personaId, clockOffsetMs: s.clockOffsetMs, demo: { ...s.demo, panelOpen: false } }),
+      partialize: (s) => ({ domain: s.domain, personaId: s.personaId, clockOffsetMs: s.clockOffsetMs, savedAt: Date.now(), demo: { ...s.demo, panelOpen: false } }),
       onRehydrateStorage: () => (s) => {
-        if (s) setClockOffset(s.clockOffsetMs);
+        if (!s) return;
+        const savedAt = (s as WeaveStore & { savedAt?: number }).savedAt;
+        const away = savedAt ? Date.now() - savedAt : 0;
+        const offset = away > CLOCK_RESUME_AFTER_MS ? s.clockOffsetMs - away : s.clockOffsetMs;
+        setClockOffset(offset);
+        s.clockOffsetMs = offset;
       },
     },
   ),
