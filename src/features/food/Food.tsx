@@ -203,12 +203,20 @@ export function MealCard({ state, now, child }: { state: DomainState; now: Date;
             </MealLink>
           </div>
         ) : null}
-        {lead ? (
-          <MealLink aria-expanded={expanded} aria-controls={listId} onClick={() => setExpanded((e) => !e)} className="self-start text-ink-3">
-            {expanded ? S.mealsHide.text : S.mealsShowAll.text}
-            <Chevron className={`transition-transform ${expanded ? '-rotate-90' : 'rotate-90'}`} />
+        <div className="flex items-center justify-between gap-3">
+          {lead ? (
+            <MealLink aria-expanded={expanded} aria-controls={listId} onClick={() => setExpanded((e) => !e)} className="text-ink-3">
+              {expanded ? S.mealsHide.text : S.mealsShowAll.text}
+              <Chevron className={`transition-transform ${expanded ? '-rotate-90' : 'rotate-90'}`} />
+            </MealLink>
+          ) : (
+            <span />
+          )}
+          <MealLink onClick={() => navigate('/baby/food')} className="text-ink-3">
+            {S.foodJourneyTitle.text}
+            <Chevron />
           </MealLink>
-        ) : null}
+        </div>
         {expanded || !lead ? (
           <div id={listId} className="flex flex-col gap-1">
             {markers ? (

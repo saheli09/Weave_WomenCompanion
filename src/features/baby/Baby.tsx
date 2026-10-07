@@ -124,7 +124,7 @@ export function BabyTab() {
 
 const t = fmt;
 
-function ModuleCard({ title, summary, latest, onLog, logLabel, onTrends, extra }: { title: string; summary: string; latest?: { id: string; text: string; time: string }[]; onLog?: () => void; logLabel?: string; onTrends: () => void; extra?: ReactNode }) {
+function ModuleCard({ title, summary, latest, onLog, logLabel, onTrends, trendsLabel = S.seeTrends.text, extra }: { title: string; summary: string; latest?: { id: string; text: string; time: string }[]; onLog?: () => void; logLabel?: string; onTrends: () => void; trendsLabel?: string; extra?: ReactNode }) {
   return (
     <section aria-label={title} className="flex flex-col gap-3 rounded-card bg-surface p-5">
       <div className="flex items-start justify-between gap-3">
@@ -150,7 +150,7 @@ function ModuleCard({ title, summary, latest, onLog, logLabel, onTrends, extra }
       ) : null}
       {extra}
       <button type="button" onClick={onTrends} className="flex min-h-[44px] items-center justify-between border-t border-line pt-1 text-left font-sans text-[13px] font-semibold text-ink-2">
-        {S.seeTrends.text}
+        {trendsLabel}
         <Chevron className="text-ink-4" />
       </button>
     </section>
@@ -252,6 +252,7 @@ function Module({ id, child, state, now, go }: { id: ModuleId; child: Child; sta
           onLog={() => (beginLog('baby.food'), openSolids(child.id))}
           logLabel={S.foodLogMeal.text}
           onTrends={() => go('/baby/food')}
+          trendsLabel={S.openFoodJourney.text}
         />
       );
     }

@@ -98,6 +98,17 @@ test('the formula card keeps all three actions on one line', async ({ page }) =>
   await expectTapTargets(page);
 });
 
+test('the food journey opens from the meal card on Today and from the Baby tab', async ({ page }) => {
+  const device = page.locator('#device');
+  await device.getByTestId('meal-card').getByRole('button', { name: 'Food journey' }).click();
+  await expect(page).toHaveURL(/\/baby\/food$/);
+  await expect(device.getByRole('heading', { name: 'Food journey' })).toBeVisible();
+  await page.goto('/baby');
+  await device.getByRole('region', { name: 'Food journey' }).getByRole('button', { name: 'Open food journey' }).click();
+  await expect(page).toHaveURL(/\/baby\/food$/);
+  await expect(device.getByText('First on 27 August')).toBeVisible();
+});
+
 test('the meal card shows the next meal; the whole day opens on demand', async ({ page }) => {
   const card = page.locator('#device [data-testid="meal-card"]');
   const toggle = card.getByRole('button', { name: 'All meals today' });

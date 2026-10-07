@@ -664,6 +664,7 @@ export const S = {
   recipeMarkFed: copy('Mark as fed', 'action'),
   recipeFed: copy('{recipe} logged as {slot}.', 'label'),
   foodJourneyTitle: copy('Food journey', 'title'),
+  openFoodJourney: copy('Open food journey', 'action'),
   foodJourneyEmpty: copy('No foods introduced yet.', 'headline'),
   foodFirstOn: copy('First on {date}', 'label'),
   foodStatusNoneYet: copy('None yet', 'label'),
