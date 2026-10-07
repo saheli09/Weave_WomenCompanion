@@ -102,7 +102,7 @@ test('Phase 1 acceptance: tin reminders at 7 days, on, and after the discard dat
   await expect(late).toHaveCount(0);
   await setClock(page, '2026-09-04T10:00');
   await expect(late).toBeVisible();
-  await device.getByRole('button', { name: 'Mark discarded' }).click();
+  await device.getByRole('button', { name: 'Discarded', exact: true }).click();
   await expect(late).toHaveCount(0);
   await setClock(page, '2026-09-10T10:00');
   await expect(device.getByText(/discard/i)).toHaveCount(0);

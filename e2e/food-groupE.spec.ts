@@ -61,7 +61,7 @@ test('advancing the demo clock re-ranks the carousel; closing the tin removes th
   for (let i = 0; i < 6; i++) await page.getByTestId('advance-day').first().click(); // 2 September, a day past
   await closePanel(page);
   await expect(first).toContainText('The open formula tin has passed its discard date.');
-  await first.getByRole('button', { name: 'Mark discarded' }).click();
+  await first.getByRole('button', { name: 'Discarded' }).click();
   await expect(device.getByText(/formula tin/)).toHaveCount(0);
 });
 
@@ -86,11 +86,16 @@ test('child card: "Last meal, 15m ago" with Diapers and Slept on the card; "+" s
   await expectTapTargets(page);
 });
 
-test('an insight with three actions keeps its text actions together on one row', async ({ page }) => {
+test('the formula card keeps all three actions on one line', async ({ page }) => {
   const card = page.locator('#device article').filter({ hasText: 'formula tin' });
-  const discarded = await card.getByRole('button', { name: 'Mark discarded' }).boundingBox();
-  const notNow = await card.getByRole('button', { name: 'Not now' }).boundingBox();
-  expect(Math.abs(discarded!.y - notNow!.y)).toBeLessThan(2);
+  const mids = await Promise.all(
+    ['Finished', 'Discarded', 'Not now'].map(async (name) => {
+      const b = (await card.getByRole('button', { name, exact: true }).boundingBox())!;
+      return b.y + b.height / 2;
+    }),
+  );
+  expect(Math.max(...mids) - Math.min(...mids)).toBeLessThan(2);
+  await expectTapTargets(page);
 });
 
 test('the meal card shows the next meal; the whole day opens on demand', async ({ page }) => {

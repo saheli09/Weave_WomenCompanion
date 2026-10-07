@@ -151,7 +151,7 @@ describe('R16 and R17: formula tin reminders (9.15)', () => {
     const [i] = runInsights([R17], { state: s, now: day(6) });
     expect(i!.headline).toBe('The open formula tin has passed its discard date.');
     expect(i!.body).toBe('Opened 18 July. Due to be discarded by 1 September.');
-    expect(i!.actions.map((a) => a.label)).toEqual(['Mark discarded', 'Mark finished', 'Not now']);
+    expect(i!.actions.map((a) => a.label)).toEqual(['Discarded', 'Finished', 'Not now']);
     const snoozed = snoozeInsight(s, i!.id, day(6));
     expect(runInsights([R17], { state: snoozed, now: day(6.5) })).toEqual([]);
     expect(runInsights([R17], { state: snoozed, now: day(7.1) })).toHaveLength(1);

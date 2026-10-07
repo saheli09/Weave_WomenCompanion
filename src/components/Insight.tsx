@@ -67,10 +67,7 @@ export function InsightCard({ insight, compact = false, ...h }: { insight: Rende
   );
 }
 
-/**
- * One secondary action sits beside the primary button. With two or more, the
- * text actions get their own row under it, so none wraps onto a line alone.
- */
+/** Primary button and text actions on one line; labels are kept short enough to fit at 360px. */
 function InsightActions({ insight, primary, hasNotNow, ...h }: { insight: RenderedInsight; primary?: RenderedInsight['actions'][number]; hasNotNow: boolean } & InsightHandlers) {
   const secondary = [
     ...insight.actions
@@ -87,18 +84,10 @@ function InsightActions({ insight, primary, hasNotNow, ...h }: { insight: Render
       {primary.label}
     </PrimaryButton>
   ) : null;
-  if (secondary.length < 2) {
-    return (
-      <div className="flex flex-wrap items-center gap-4">
-        {button}
-        {secondary}
-      </div>
-    );
-  }
   return (
-    <div className="flex flex-col items-start gap-3">
+    <div className="flex flex-wrap items-center gap-3">
       {button}
-      <div className="flex flex-wrap items-center gap-6">{secondary}</div>
+      {secondary}
     </div>
   );
 }

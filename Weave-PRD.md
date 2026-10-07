@@ -545,7 +545,7 @@ Units, hydration goal, notification mock, insight frequency (fewer, standard), d
 - On the day: "The open formula tin is due to be discarded today." Muted body: "Opened 2 September."
 - After: "The open formula tin has passed its discard date." Muted body: "Opened 2 September. Due to be discarded by 17 October."
 - Dates and the day count come from the tin and the clock, never fixed text.
-- Actions: "Mark finished", "Mark discarded", "Not now".
+- Actions, on one line: "Finished", "Discarded", "Not now".
 
 **Non-goals for this feature.**
 - No estimate of the quantity remaining, and no linking of individual bottles to a tin.
@@ -611,8 +611,8 @@ Empty, populated, long content, first-use, offline (everything is local), and re
 | R13 | her | Labour: all three signs met | Escalation | Call your provider |
 | R14 | her | Bleeding logged Heavy | Escalation | Contact provider |
 | R15 | her | Low mood three days in a row (postpartum) | Support card | See support options |
-| R16 | child | An active formula tin is 7 days or fewer from its discard date (time-limited) | "The open formula tin is due to be discarded by 17 October." Muted body: "Opened 2 September. Three days left." ("One day left."; on the day the headline reads "…due to be discarded today.") | Mark finished / Mark discarded / Not now |
-| R17 | child | An active formula tin has passed its discard date (time-limited) | "The open formula tin has passed its discard date." Muted body: "Opened 2 September. Due to be discarded by 17 October." Reappears until acted on (24 hour snooze allowed) | Mark discarded / Mark finished / Not now |
+| R16 | child | An active formula tin is 7 days or fewer from its discard date (time-limited) | "The open formula tin is due to be discarded by 17 October." Muted body: "Opened 2 September. Three days left." ("One day left."; on the day the headline reads "…due to be discarded today.") | Finished / Discarded / Not now |
+| R17 | child | An active formula tin has passed its discard date (time-limited) | "The open formula tin has passed its discard date." Muted body: "Opened 2 September. Due to be discarded by 17 October." Reappears until acted on (24 hour snooze allowed) | Discarded / Finished / Not now |
 
 ### 11.3 Escalation rules (must be provider-first, never reassurance)
 These must show the escalation card style, cannot be dismissed with "Not now" alone (they can be acknowledged), and always include a way to contact a provider. **All copy here needs clinical review.**
