@@ -541,9 +541,10 @@ Units, hydration goal, notification mock, insight frequency (fewer, standard), d
 - "Not now" snoozes for 24 hours as with other insights.
 
 **Copy.** Factual and calm. No "you must" language, no alarm, no guilt.
-- "The formula tin opened on 2 September is due to be discarded by 17 October. Twelve days left."
-- "Discard date for the open tin is today."
-- "The tin opened on 2 September has passed its discard date."
+- "The open formula tin is due to be discarded by 17 October." Muted body: "Opened 2 September. Five days left."
+- On the day: "The open formula tin is due to be discarded today." Muted body: "Opened 2 September."
+- After: "The open formula tin has passed its discard date." Muted body: "Opened 2 September. Due to be discarded by 17 October."
+- Dates and the day count come from the tin and the clock, never fixed text.
 - Actions: "Mark finished", "Mark discarded", "Not now".
 
 **Non-goals for this feature.**
@@ -589,7 +590,7 @@ Empty, populated, long content, first-use, offline (everything is local), and re
 
 ### 11.1 Architecture
 - Deterministic rules run over local state (logs, medicines, food introductions, phase) and return candidate insights with a priority. The prototype does not need an LLM.
-- Rank: escalation first, then by recency and relevance. Show at most four in the carousel. A per-rule frequency cap prevents repeats (default once per 24 hours per rule).
+- Rank by urgency: escalations first, then time-limited cards (something she can miss: a formula tin within seven days of its discard date or past it, an open reaction window), then everything else. Within a group, newest first, where "newest" is when the situation the card describes last changed: the current moment for conditions that hold now ("no water yet today", "dose not logged yet"), the last log behind it for trends ("spotting has eased"), and the start of the reminder window for formula tins. Ties go to the rule's priority. Show at most four in the carousel. A per-rule frequency cap prevents repeats (default once per 24 hours per rule).
 - Optional later: an LLM may paraphrase within the copy rules, but never invents claims. Rules stay the source of what is said.
 
 ### 11.2 Starter rule catalogue
@@ -610,8 +611,8 @@ Empty, populated, long content, first-use, offline (everything is local), and re
 | R13 | her | Labour: all three signs met | Escalation | Call your provider |
 | R14 | her | Bleeding logged Heavy | Escalation | Contact provider |
 | R15 | her | Low mood three days in a row (postpartum) | Support card | See support options |
-| R16 | child | An active formula tin is 7 days or fewer from its discard date | "The formula tin opened on 2 September is due to be discarded by 17 October." plus days left | Mark finished / Mark discarded / Not now |
-| R17 | child | An active formula tin has passed its discard date | "The tin opened on 2 September has passed its discard date." Reappears until acted on (24 hour snooze allowed) | Mark discarded / Mark finished |
+| R16 | child | An active formula tin is 7 days or fewer from its discard date (time-limited) | "The open formula tin is due to be discarded by 17 October." Muted body: "Opened 2 September. Three days left." ("One day left."; on the day the headline reads "…due to be discarded today.") | Mark finished / Mark discarded / Not now |
+| R17 | child | An active formula tin has passed its discard date (time-limited) | "The open formula tin has passed its discard date." Muted body: "Opened 2 September. Due to be discarded by 17 October." Reappears until acted on (24 hour snooze allowed) | Mark discarded / Mark finished / Not now |
 
 ### 11.3 Escalation rules (must be provider-first, never reassurance)
 These must show the escalation card style, cannot be dismissed with "Not now" alone (they can be acknowledged), and always include a way to contact a provider. **All copy here needs clinical review.**
@@ -766,8 +767,8 @@ Record (locally, no external analytics) time-to-log per action and number of tap
 - "Has your period come back? Most first periods land between two and twelve months. When yours does, cycle tracking opens up here."
 - "Nothing here is required to keep using Weave."
 - "Too early to estimate. Postpartum cycles are often irregular."
-- "The formula tin opened on 2 September is due to be discarded by 17 October. Twelve days left."
-- "Discard date for the open tin is today."
+- "The open formula tin is due to be discarded by 17 October." / "Opened 2 September. Five days left."
+- "The open formula tin is due to be discarded today."
 - "Use or discard by 17 October."
 
 ## Appendix B: Out of scope, recorded for later
