@@ -1,4 +1,4 @@
-import { useId, useState, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import type { Review } from '../content/copy';
 import { Chevron, Plus } from './Icon';
 import { ReviewFlag, ReviewTag, useReviewMarkers } from './ReviewFlag';
@@ -78,24 +78,6 @@ export function KPIRow({ label, value, muted, onAdd, addLabel, expanded }: { lab
     </button>
   ) : (
     <div className="flex min-h-[44px] w-full items-center justify-between">{content}</div>
-  );
-}
-
-/**
- * A quiet "More" row that opens secondary KPI rows in place (PRD 13: at the
- * toddler stage diaper and sleep logging collapse to "show more").
- */
-export function MoreRows({ label, lessLabel, children }: { label: string; lessLabel: string; children: ReactNode }) {
-  const [open, setOpen] = useState(false);
-  const id = useId();
-  return (
-    <>
-      <button type="button" aria-expanded={open} aria-controls={id} onClick={() => setOpen((o) => !o)} className="flex min-h-[44px] w-full items-center justify-between text-left">
-        <span className="type-secondary text-ink-3">{open ? lessLabel : label}</span>
-        <Chevron className={`text-ink-4 transition-transform ${open ? '-rotate-90' : 'rotate-90'}`} />
-      </button>
-      {open ? <div id={id} className="flex flex-col">{children}</div> : null}
-    </>
   );
 }
 

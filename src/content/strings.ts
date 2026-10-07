@@ -39,8 +39,6 @@ export const S = {
   noMealYet: copy('No meal logged yet', 'label'),
   lastMealAt: copy('Last meal {time}', 'label'),
   lastMealAgo: copy('Last meal, {ago}', 'label'),
-  moreRows: copy('More', 'action'),
-  lessRows: copy('Less', 'action'),
   finishBirthTitle: copy('Finish your birth details', 'headline'),
   finishBirthBody: copy('Nothing here is required to keep using Weave.', 'body'),
   open: copy('Open', 'action'),

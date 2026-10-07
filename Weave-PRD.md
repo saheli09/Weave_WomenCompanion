@@ -407,7 +407,7 @@ Common shell: uppercase date label, right pill (child age such as "Srinika's Age
 **Behaviours**
 - Insight carousel: up to four cards, swipeable, dots below. "Not now" snoozes that card for 24 hours. Escalation cards cannot be dismissed permanently (section 11.3).
 - Child card and Me card KPIs are tappable (section 10). Values update immediately.
-- Toddler child card: the headline reads "Last meal, 2h ago", from the last solids or milk log, in place of a large "since last feed" figure. Diapers and Sleep sit behind one quiet "More" row that expands in place; their "+" still logs (section 13).
+- Toddler child card: the headline reads "Last meal, 2h ago", from the last solids or milk log, in place of a large "since last feed" figure. Diapers and Sleep stay on the card below it, each with its "+".
 - Toddler first screen: at 390 x 844 the greeting, the top insight card, the compact meal card and the top of the child and Me cards are visible without scrolling.
 - "Today so far": newest first, subject chip (child name or "You"/"Me"; pick one and use it everywhere), "All" opens the full timeline with filter chips (All, child name, Me).
 - Empty state (nothing logged today): serif line "Nothing logged yet today." with one action, the FAB.
@@ -659,7 +659,7 @@ Stage is derived from the child's age and refined by usage.
 | Newborn | 0 to 3 months | Feed, Sleep, Diaper logging | Growth, Vaccinations |
 | Infant | 3 to 6 months | Same as newborn; sleep patterns surface | Solids readiness prompt |
 | Starting solids | 6 to 12 months | Solids log, Food journey, meal card | Milk feeds |
-| Toddler | 12 months and over | Meal suggestion (compact meal card above the child and Me cards), reaction prompt and medicines when active; child card leads with "Last meal, 2h ago" | Diaper and sleep logging collapsed behind a "More" row on the child card (expands in place, "+" still logs); milk feeds count towards "Last meal" |
+| Toddler | 12 months and over | Meal suggestion (compact meal card above the child and Me cards), reaction prompt and medicines when active; child card leads with "Last meal, 2h ago" | Diaper and sleep rows stay on the child card, below "Last meal"; milk feeds count towards "Last meal" |
 
 **Taper, not switch.** Do not flip layouts at a hard age. If routine logging (feeds, diapers) drops sharply for two weeks, or she stops logging milk, demote those rows gradually. She can pin any module back to the top in Settings. Whether this is age-driven, usage-driven or manual is an open question; build age-driven with the usage override.
 

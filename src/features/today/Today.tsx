@@ -6,7 +6,7 @@ import { milestonesForWeek } from '../../content/milestones';
 import { t, Copy } from '../../components/Copy';
 import { ScreenHeader } from '../../components/Shell';
 import { InsightCarousel } from '../../components/Insight';
-import { SubjectCard, KPIRow, MoreRows, Section, ListCard, ListRow, AddRow, ChecklistRow, ReadingCard, ContextCard, Avatar } from '../../components/Cards';
+import { SubjectCard, KPIRow, Section, ListCard, ListRow, AddRow, ChecklistRow, ReadingCard, ContextCard, Avatar } from '../../components/Cards';
 import { ActivityTimeline } from '../../components/Timeline';
 import { EmptyState, InlineUndo, useUndo } from '../../components/States';
 import { BleedingSheet, DiaperChooser } from '../quicklog/BabyLogs';
@@ -222,8 +222,7 @@ function ChildCard({ state, now, child, toddler, diaperOpen, onDiaper }: { state
         },
         addLabel: t(S.logFeedA11y, { name: child.name }),
       }}
-      // Toddler: diaper and sleep logging collapse behind "More" (PRD 13); "+" still logs once open.
-      rows={toddler ? <MoreRows label={S.moreRows.text} lessLabel={S.lessRows.text}>{rows}</MoreRows> : rows}
+      rows={rows}
     />
   );
 }

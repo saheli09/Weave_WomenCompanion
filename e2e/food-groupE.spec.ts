@@ -76,14 +76,10 @@ test('a persona loaded two days after the anchor is seeded around that time, not
   await expect(device.getByText('Opened 20 July. Five days left.')).toBeVisible();
 });
 
-test('child card: "Last meal, 15m ago"; diapers and sleep sit behind More and still log', async ({ page }) => {
+test('child card: "Last meal, 15m ago" with Diapers and Slept on the card; "+" still logs', async ({ page }) => {
   const card = page.locator('#device').getByRole('region', { name: 'Srinika' });
   await expect(card.getByText('Last meal, 15m ago')).toBeVisible();
-  await expect(card.getByText('Diapers')).toHaveCount(0);
-  const more = card.getByRole('button', { name: 'More' });
-  await expect(more).toHaveAttribute('aria-expanded', 'false');
-  await more.click();
-  await expect(card.getByRole('button', { name: 'Less' })).toHaveAttribute('aria-expanded', 'true');
+  await expect(card.getByText('Slept')).toBeVisible();
   await card.getByRole('button', { name: /^Log a diaper for Srinika/ }).click();
   await page.locator('#device').getByRole('button', { name: 'Wet', exact: true }).click();
   await expect(card.getByRole('button', { name: /Diapers: 5/ })).toBeVisible();
