@@ -117,6 +117,7 @@ test('Food journey card on the Baby tab: See trends opens meals per day', async 
   await expect(page).toHaveURL(/\/baby\/meals$/);
   await expect(device.getByRole('heading', { name: 'Meals', exact: true })).toBeVisible();
   await expect(device.getByText('Last seven days', { exact: true })).toBeVisible();
+  await expectTapTargets(page); // seven day bars side by side, each 44px or wider, no overlap
 });
 
 test('the meal card shows the next meal; the whole day opens on demand', async ({ page }) => {

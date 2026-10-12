@@ -88,3 +88,32 @@ for (const [name, persona, act] of FLOWS) {
     expect(summary, summary.join('\n')).toEqual([]);
   });
 }
+
+/** Seven-day charts: each day's tap area is at least 44px wide and none overlap (PRD 15). */
+const CHARTS: [persona: string, path: string][] = [
+  ['D3', '/baby/feeding'],
+  ['D3', '/baby/sleep'],
+  ['D3', '/baby/diaper'],
+  ['D3', '/me/hydration'],
+  ['D3', '/me/pelvic'],
+  ['D3', '/me/sleep'],
+  ['D5', '/baby/meals'],
+];
+
+for (const [persona, path] of CHARTS) {
+  test(`day bars: ${persona} ${path} are 44px wide with no overlap`, async ({ page }) => {
+    await start(page, persona);
+    await page.goto(path);
+    const bars = page.locator('#device figure button[aria-label*=": "]');
+    await expect(bars).toHaveCount(7);
+    const measure = () => bars.evaluateAll((els) => els.map((e) => e.getBoundingClientRect()).map((r) => ({ left: r.left, right: r.right, width: r.width, height: r.height })));
+    // Measure once the layout has settled (fonts and the screen transition can still be landing).
+    await expect.poll(async () => Math.min(...(await measure()).map((b) => b.width))).toBeGreaterThanOrEqual(44);
+    const boxes = await measure();
+    for (const b of boxes) {
+      expect(b.width).toBeGreaterThanOrEqual(44);
+      expect(b.height).toBeGreaterThanOrEqual(44);
+    }
+    for (let i = 1; i < boxes.length; i++) expect(boxes[i]!.left).toBeGreaterThanOrEqual(boxes[i - 1]!.right - 0.5);
+  });
+}

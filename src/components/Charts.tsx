@@ -60,7 +60,9 @@ export function DayBars({ data, unit, caption, height = 96 }: { data: Datum[]; u
       {table ? (
         <DataTable data={data} unit={unit} caption={caption} />
       ) : (
-        <div className="relative">
+        // Runs 16px into the card padding so seven side-by-side tap areas are each at
+        // least 44px wide at 360px, with no overlap; bars and tap areas share the width.
+        <div className="relative -mx-4">
           <svg width="100%" viewBox={`0 0 ${w} ${height}`} role="img" aria-label={caption}>
             <line x1={0} x2={w} y1={plotH + 0.5} y2={plotH + 0.5} stroke="var(--color-line)" />
             {data.map((d, i) => {
