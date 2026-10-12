@@ -53,7 +53,7 @@ The deeper need is **reduced mental load and decision confidence**. App-switchin
 - No diagnosis, triage or medical interpretation.
 - No twins/multiples UI (data model must not prevent it later).
 - No community, shopping, wearables or content library beyond the seed content in section 9.
-- No cycle-based fertility or conception features in this round (trying to conceive is a later stage).
+- No conception features in this round (trying to conceive is a later stage). The cycle screen does show an estimated ovulation day and fertile window, derived from her own logged cycles and always labelled as an estimate that is not a method of contraception (section 9.8); there is no conception planning, ovulation testing or fertility scoring.
 
 ### 2.3 Success criteria
 | Criterion | Target |
@@ -471,6 +471,12 @@ While a sleep or breastfeed timer is running, show a persistent pill above the n
 - "Yes, it has" asks one question: start date (default today), then opens the Cycle screen.
 - **Cycle screen:** month calendar with period days marked; a day-detail sheet to log flow (Spotting, Light, Medium, Heavy) and symptoms (cramps, headache, low mood, tiredness, other); an "End period" action; history list.
 - **Predictions:** none until at least two completed cycles are logged. Until then show "Too early to estimate. Postpartum cycles are often irregular." Breastfeeding status is shown as context only.
+- **Estimates once two cycles are complete** (calendar method from her own logs; method and wording need clinical review):
+  - Next period: the latest start plus her average cycle length. Predicted periods last her average period length.
+  - Ovulation: estimated 14 days before the next start. Fertile window: the five days before the estimated ovulation and the day itself.
+  - The calendar covers every month since her first logged period and the next three months ahead. Logged period days are filled; predicted period days have a dashed outline; the estimated fertile window is tinted and the estimated ovulation day ringed. A legend sits under the calendar. Every marked day's accessible name says what it is ("ovulation, estimate").
+  - The summary card lists the next period, the fertile window still ahead (this cycle's, otherwise the next one's), the estimated ovulation, and the range of her recent cycle lengths ("Your last six cycles ran 27 to 30 days."), followed by a fixed line: "Estimates from your past cycles. Not a method of contraception. Ovulation can shift, especially while breastfeeding."
+  - "Coming up" lists the predicted periods with each one's fertile window and ovulation; History adds the estimated ovulation for each past cycle.
 - Today and Me gain Period (Day N) and Flow rows as in S02.
 - Optional entry point (P2): Me, Cycle, "I'm pregnant again" starts a new pregnancy (section 6.2).
 
