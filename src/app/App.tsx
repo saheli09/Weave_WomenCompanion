@@ -75,6 +75,7 @@ function DeviceLayout() {
                 <Route path="/me/cycle" element={<CycleScreen />} />
                 <Route path="/baby" element={<BabyTab />} />
                 <Route path="/baby/feeding" element={<ModuleHistory kind="feeding" />} />
+                <Route path="/baby/meals" element={<ModuleHistory kind="meals" />} />
                 <Route path="/baby/sleep" element={<ModuleHistory kind="sleep" />} />
                 <Route path="/baby/diaper" element={<ModuleHistory kind="diaper" />} />
                 <Route path="/baby/growth" element={<GrowthScreen />} />

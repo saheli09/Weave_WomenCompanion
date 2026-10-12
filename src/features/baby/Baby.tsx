@@ -124,7 +124,8 @@ export function BabyTab() {
 
 const t = fmt;
 
-function ModuleCard({ title, summary, latest, onLog, logLabel, onTrends, trendsLabel = S.seeTrends.text, extra }: { title: string; summary: string; latest?: { id: string; text: string; time: string }[]; onLog?: () => void; logLabel?: string; onTrends: () => void; trendsLabel?: string; extra?: ReactNode }) {
+function ModuleCard({ title, summary, latest, onLog, logLabel, onTrends, links, extra }: { title: string; summary: string; latest?: { id: string; text: string; time: string }[]; onLog?: () => void; logLabel?: string; onTrends?: () => void; links?: { label: string; onClick: () => void }[]; extra?: ReactNode }) {
+  const rows = links ?? (onTrends ? [{ label: S.seeTrends.text, onClick: onTrends }] : []);
   return (
     <section aria-label={title} className="flex flex-col gap-3 rounded-card bg-surface p-5">
       <div className="flex items-start justify-between gap-3">
@@ -149,10 +150,12 @@ function ModuleCard({ title, summary, latest, onLog, logLabel, onTrends, trendsL
         </ul>
       ) : null}
       {extra}
-      <button type="button" onClick={onTrends} className="flex min-h-[44px] items-center justify-between border-t border-line pt-1 text-left font-sans text-[13px] font-semibold text-ink-2">
-        {trendsLabel}
-        <Chevron className="text-ink-4" />
-      </button>
+      {rows.map((r) => (
+        <button key={r.label} type="button" onClick={r.onClick} className="flex min-h-[44px] items-center justify-between border-t border-line pt-1 text-left font-sans text-[13px] font-semibold text-ink-2">
+          {r.label}
+          <Chevron className="text-ink-4" />
+        </button>
+      ))}
     </section>
   );
 }
@@ -251,8 +254,10 @@ function Module({ id, child, state, now, go }: { id: ModuleId; child: Child; sta
           latest={latest((l) => l.type === 'feed' && l.mode === 'solids')}
           onLog={() => (beginLog('baby.food'), openSolids(child.id))}
           logLabel={S.foodLogMeal.text}
-          onTrends={() => go('/baby/food')}
-          trendsLabel={S.openFoodJourney.text}
+          links={[
+            { label: S.openFoodJourney.text, onClick: () => go('/baby/food') },
+            { label: S.seeTrends.text, onClick: () => go('/baby/meals') },
+          ]}
         />
       );
     }
@@ -263,14 +268,15 @@ const weightLabel = (g: number, state: DomainState) => (state.her.units.weight =
 
 /* ------------------------------------------------- B09, B10, B11: history */
 
-export function ModuleHistory({ kind }: { kind: 'feeding' | 'sleep' | 'diaper' }) {
+export function ModuleHistory({ kind }: { kind: 'feeding' | 'meals' | 'sleep' | 'diaper' }) {
   const state = useDomain();
   const now = useNow();
   const child = useBabyChild();
   if (!child) return <Navigate to="/baby" replace />;
   const logs = childLogs(state, child.id).filter((l) => parseDate(l.at) <= now);
   const days = lastDays(now);
-  const match = (l: LogEntry) => (kind === 'feeding' ? l.type === 'feed' : kind === 'sleep' ? l.type === 'sleep' && Boolean(l.end) : l.type === 'diaper');
+  const match = (l: LogEntry) =>
+    kind === 'feeding' ? l.type === 'feed' : kind === 'meals' ? l.type === 'feed' && l.mode === 'solids' : kind === 'sleep' ? l.type === 'sleep' && Boolean(l.end) : l.type === 'diaper';
   const ofDay = (d: Date) => logs.filter((l) => match(l) && isSameDay(parseDate(l.at), d));
   const data = days.map((d) =>
     dayDatum(
@@ -280,8 +286,8 @@ export function ModuleHistory({ kind }: { kind: 'feeding' | 'sleep' | 'diaper' }
         : ofDay(d).length,
     ),
   );
-  const title = kind === 'feeding' ? S.moduleFeeding.text : kind === 'sleep' ? S.moduleSleep.text : S.moduleDiaper.text;
-  const caption = kind === 'feeding' ? S.feedsPerDay.text : kind === 'sleep' ? S.sleepPerDay.text : S.diapersPerDay.text;
+  const title = { feeding: S.moduleFeeding, meals: S.moduleMeals, sleep: S.moduleSleep, diaper: S.moduleDiaper }[kind].text;
+  const caption = { feeding: S.feedsPerDay, meals: S.mealsPerDay, sleep: S.sleepPerDay, diaper: S.diapersPerDay }[kind].text;
   const unit = (v: number) => (kind === 'sleep' ? `${v}h` : String(v));
   const recent = [...days]
     .reverse()

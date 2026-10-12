@@ -107,6 +107,18 @@ test('the food journey opens from the Baby tab, not from the meal card on Today'
   await expect(device.getByText('First on 27 August')).toBeVisible();
 });
 
+test('Food journey card on the Baby tab: See trends opens meals per day', async ({ page }) => {
+  const device = page.locator('#device');
+  await page.goto('/baby');
+  const card = device.getByRole('region', { name: 'Food journey' });
+  await expect(card.getByRole('button', { name: 'Open food journey' })).toBeVisible();
+  await expectTapTargets(page, '#device main section[aria-label="Food journey"]');
+  await card.getByRole('button', { name: 'See trends' }).click();
+  await expect(page).toHaveURL(/\/baby\/meals$/);
+  await expect(device.getByRole('heading', { name: 'Meals', exact: true })).toBeVisible();
+  await expect(device.getByText('Last seven days', { exact: true })).toBeVisible();
+});
+
 test('the meal card shows the next meal; the whole day opens on demand', async ({ page }) => {
   const card = page.locator('#device [data-testid="meal-card"]');
   const toggle = card.getByRole('button', { name: 'All meals today' });
