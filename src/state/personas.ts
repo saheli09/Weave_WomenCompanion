@@ -287,9 +287,28 @@ function buildAtAnchor(id: PersonaId): DomainState {
       if (id === 'D5') {
         s.her.phase = 'postpartum';
         s.her.postpartum = { birthId: 'birth_1', startedAt: iso(born) };
-        // Period active, day 3, medium (Figma toddler frame).
+        // Period active, day 3, medium (Figma toddler frame), after six earlier cycles of
+        // 27 to 30 days, so the cycle screen can show estimates (two completed cycles needed, 9.8).
         const periodStart = addDaysISO(today, -2);
-        s.her.cycle = { active: true, lastPeriodStart: periodStart, periodDays: [periodStart, addDaysISO(today, -1), today] };
+        const past: { length: number; days: number }[] = [
+          { length: 28, days: 5 }, // the cycle before the current one
+          { length: 29, days: 4 },
+          { length: 27, days: 5 },
+          { length: 30, days: 5 },
+          { length: 28, days: 4 },
+          { length: 29, days: 5 },
+        ];
+        const pastDays: string[] = [];
+        let start = periodStart;
+        for (const c of past) {
+          start = addDaysISO(start, -c.length);
+          const back = calendarDaysBetween(start, today);
+          (['light', 'medium', 'medium', 'light', 'spotting'] as const).slice(0, c.days).forEach((flow, i) => {
+            pastDays.push(addDaysISO(start, i));
+            b.log(b.her, b.at(back - i, 8, 0), { type: 'period', flow, event: i === 0 ? 'start' : 'day' }, 'sheet');
+          });
+        }
+        s.her.cycle = { active: true, lastPeriodStart: periodStart, periodDays: [...pastDays.sort(), periodStart, addDaysISO(today, -1), today] };
         b.log(b.her, b.at(2, 8, 0), { type: 'period', flow: 'light', event: 'start' }, 'sheet');
         b.log(b.her, b.at(1, 8, 0), { type: 'period', flow: 'medium', event: 'day' }, 'sheet');
         b.log(b.her, b.at(0, 9, 34), { type: 'period', flow: 'medium', event: 'day' }, 'sheet');

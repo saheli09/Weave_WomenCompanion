@@ -80,3 +80,65 @@ test('cycle screen (D4): calendar marks period days, day sheet logs flow and sym
   await expect(device.getByRole('heading', { name: 'No period right now' })).toBeVisible();
   await expectTapTargets(page);
 });
+
+test('cycle estimates (D5): fertile window, ovulation and next period, framed as estimates', async ({ page }) => {
+  await start(page, 'D5');
+  await page.goto('/me/cycle');
+  const summary = page.locator('#device [data-testid="cycle-summary"]');
+  await expect(summary.getByText('Next period estimate: around 23 September')).toBeVisible();
+  await expect(summary.getByText('Estimated fertile window: 4 to 9 September')).toBeVisible();
+  await expect(summary.getByText('Estimated ovulation: around 9 September')).toBeVisible();
+  await expect(summary.getByText('Your last six cycles ran 27 to 30 days.')).toBeVisible();
+  await expect(summary.getByText(/Not a method of contraception\./)).toBeVisible();
+  await expect(page.locator('#device [data-testid="cycle-legend"]')).toContainText('Ovulation, estimate');
+  await expectTapTargets(page);
+});
+
+test('cycle calendar (D5): past months with estimates, three predicted months ahead, then it stops', async ({ page }) => {
+  await start(page, 'D5');
+  await page.goto('/me/cycle');
+  const device = page.locator('#device');
+  const prev = device.getByRole('button', { name: 'Previous month' });
+  const next = device.getByRole('button', { name: 'Next month' });
+  await prev.click(); // July: a logged period and that cycle's estimates
+  await expect(device.getByRole('button', { name: /^Wednesday 1 July, period day/ })).toBeVisible();
+  await expect(device.getByRole('button', { name: 'Tuesday 14 July, ovulation, estimate' })).toBeVisible();
+  await expect(device.getByRole('button', { name: 'Thursday 9 July, fertile window, estimate' })).toBeVisible();
+  await next.click();
+  await next.click(); // September
+  await expect(device.getByRole('button', { name: 'Wednesday 9 September, ovulation, estimate' })).toBeVisible();
+  await expect(device.getByRole('button', { name: 'Wednesday 23 September, predicted period' })).toBeVisible();
+  await next.click();
+  await next.click(); // November, the last predicted month
+  await expect(device.getByRole('heading', { name: 'November 2026' })).toBeVisible();
+  await expect(device.getByRole('button', { name: 'Friday 20 November, predicted period' })).toBeVisible();
+  await expect(next).toBeDisabled();
+  for (let i = 0; i < 8; i++) if (await prev.isEnabled()) await prev.click();
+  await expect(device.getByRole('heading', { name: 'March 2026' })).toBeVisible(); // first logged period
+  await expect(prev).toBeDisabled();
+});
+
+test('coming up (D5): the next three periods with their estimated fertile windows; history shows past ovulation', async ({ page }) => {
+  await start(page, 'D5');
+  await page.goto('/me/cycle');
+  const device = page.locator('#device');
+  for (const [period, fertile] of [
+    ['Period around 23 September', 'Fertile window 3 to 8 October · ovulation around 8 October'],
+    ['Period around 22 October', 'Fertile window 1 to 6 November · ovulation around 6 November'],
+    ['Period around 20 November', 'Fertile window 30 November to 5 December · ovulation around 5 December'],
+  ]) {
+    await expect(device.getByText(period!, { exact: true })).toBeVisible();
+    await expect(device.getByText(fertile!, { exact: true })).toBeVisible();
+  }
+  await expect(device.getByText('Estimated ovulation 11 August', { exact: true })).toBeVisible();
+});
+
+test('cycle (D4): one period so far, so no estimates and no future months', async ({ page }) => {
+  await start(page, 'D4');
+  await page.goto('/me/cycle');
+  const device = page.locator('#device');
+  await expect(device.getByText('Too early to estimate. Postpartum cycles are often irregular.')).toBeVisible();
+  await expect(device.getByText(/fertile window/i)).toHaveCount(0);
+  await expect(device.getByTestId('cycle-legend')).toHaveCount(0);
+  await expect(device.getByRole('button', { name: 'Next month' })).toBeDisabled();
+});

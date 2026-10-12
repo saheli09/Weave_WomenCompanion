@@ -78,3 +78,87 @@ export function nextPeriodEstimate(days: ISODate[]): ISODate | undefined {
 }
 
 
+
+/* ---------------------------------------------------------------------------
+ * Estimates for the cycle calendar: past, current and upcoming cycles with an
+ * estimated ovulation day and fertile window. Calendar arithmetic only, from her
+ * own logged starts; never a method of contraception. Constants need clinical review.
+ * ------------------------------------------------------------------------- */
+
+/** Days from estimated ovulation to the next period (luteal phase). Needs clinical review. */
+export const LUTEAL_DAYS = 14;
+/** Fertile window: this many days before estimated ovulation, through ovulation day. Needs clinical review. */
+export const FERTILE_DAYS_BEFORE = 5;
+/** How far ahead the calendar shows predicted cycles. */
+export const PREDICT_MONTHS = 3;
+
+export interface CycleEstimate {
+  kind: 'past' | 'current' | 'predicted';
+  start: ISODate;
+  /** Days to the next start: measured for past cycles, the average otherwise. */
+  length: number;
+  /** Logged period days for past and current cycles; the average length for predicted ones. */
+  periodDays: ISODate[];
+  ovulation: ISODate;
+  fertileStart: ISODate;
+  fertileEnd: ISODate;
+}
+
+export interface CycleTimeline {
+  cycles: CycleEstimate[];
+  averageLength: number;
+  averagePeriod: number;
+  shortest: number;
+  longest: number;
+  nextStart: ISODate;
+}
+
+const span = (start: ISODate, n: number) => Array.from({ length: n }, (_, i) => addDaysISO(start, i));
+
+function estimateFor(kind: CycleEstimate['kind'], start: ISODate, length: number, periodDays: ISODate[]): CycleEstimate {
+  const ovulation = addDaysISO(start, length - LUTEAL_DAYS);
+  return { kind, start, length, periodDays, ovulation, fertileStart: addDaysISO(ovulation, -FERTILE_DAYS_BEFORE), fertileEnd: ovulation };
+}
+
+/**
+ * Every logged cycle plus predictions until the end of the month `PREDICT_MONTHS`
+ * after `now`. Undefined until two cycles are complete (9.8), so the screen says
+ * "Too early to estimate" instead.
+ */
+export function cycleTimeline(days: ISODate[], now: Date): CycleTimeline | undefined {
+  const lengths = cycleLengths(days);
+  if (lengths.length < MIN_COMPLETED_CYCLES) return undefined;
+  const runs = periodRuns(days);
+  const averageLength = Math.round(lengths.reduce((a, b) => a + b, 0) / lengths.length);
+  const averagePeriod = Math.round(runs.slice(0, -1).reduce((a, r) => a + r.length, 0) / (runs.length - 1));
+  const cycles: CycleEstimate[] = runs.map((r, i) =>
+    i < runs.length - 1 ? estimateFor('past', r.start, lengths[i]!, span(r.start, r.length)) : estimateFor('current', r.start, averageLength, span(r.start, r.length)),
+  );
+  const nextStart = addDaysISO(runs.at(-1)!.start, averageLength);
+  const until = new Date(now.getFullYear(), now.getMonth() + PREDICT_MONTHS + 1, 0);
+  for (let start = nextStart; new Date(`${start}T00:00:00`) <= until; start = addDaysISO(start, averageLength)) {
+    cycles.push(estimateFor('predicted', start, averageLength, span(start, averagePeriod)));
+  }
+  return { cycles, averageLength, averagePeriod, shortest: Math.min(...lengths), longest: Math.max(...lengths), nextStart };
+}
+
+export interface CycleDay {
+  period?: 'logged' | 'predicted';
+  fertile: boolean;
+  ovulation: boolean;
+}
+
+/** What the calendar shows on one day. Logged period days always win over estimates. */
+export function cycleDay(timeline: CycleTimeline | undefined, days: ISODate[], iso: ISODate): CycleDay {
+  const logged = days.includes(iso);
+  if (!timeline) return { period: logged ? 'logged' : undefined, fertile: false, ovulation: false };
+  const c = timeline.cycles.find((x) => iso >= x.fertileStart && iso <= x.fertileEnd);
+  const predicted = !logged && timeline.cycles.some((x) => x.kind === 'predicted' && x.periodDays.includes(iso));
+  return { period: logged ? 'logged' : predicted ? 'predicted' : undefined, fertile: Boolean(c) && !logged, ovulation: c?.ovulation === iso && !logged };
+}
+
+/** Day of the current cycle (1 = first period day), once tracking has a start. */
+export function cycleDayNumber(days: ISODate[], now: Date): number | undefined {
+  const start = periodStarts(days).at(-1);
+  return start ? calendarDaysBetween(start, now) + 1 : undefined;
+}

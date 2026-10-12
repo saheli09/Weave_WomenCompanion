@@ -34,6 +34,7 @@ const SCREENS: [persona: string, path: string][] = [
   ['D3', '/settings'],
   ['D3', '/onboarding'],
   ['D4', '/me/cycle'],
+  ['D5', '/me/cycle'],
   ['D5', '/today'],
   ['D5', '/baby'],
   ['D5', '/baby/food'],

@@ -9,9 +9,9 @@ import { BottomSheet } from '../../components/Sheet';
 import { FilterChip } from '../../components/Chip';
 import { Field, fieldCls } from '../../components/Form';
 import { Chevron } from '../../components/Icon';
-import { addDaysISO, formatDayMonth, formatLongDate, toISODate } from '../../domain/dates';
+import { formatDayMonth, formatLongDate, numberWord, toISODate } from '../../domain/dates';
 import { currentPeriodDay } from '../../domain/stage';
-import { endPeriod, logPeriodDay, nextPeriodEstimate, periodRuns, removePeriodDay, cycleLengths } from '../../domain/cycle';
+import { cycleDay, cycleDayNumber, cycleLengths, cycleTimeline, endPeriod, logPeriodDay, nextPeriodEstimate, periodRuns, periodStarts, PREDICT_MONTHS, removePeriodDay } from '../../domain/cycle';
 import { pregnantAgain } from '../../domain/transitions';
 import type { BleedingLevel, DomainState, LogEntry } from '../../domain/types';
 import { useDomain, useWeave } from '../../state/store';
@@ -20,9 +20,11 @@ import { useToast } from '../../app/Toast';
 import { commitLog } from '../../metrics/timeToLog';
 
 /**
- * Cycle (B25, 9.8): month calendar with period days, a day-detail sheet for
- * flow and symptoms, End period, history, and an estimate only after two
- * complete cycles. Breastfeeding shows as context only.
+ * Cycle (B25, 9.8): month calendar with logged periods and, once two cycles are
+ * complete, estimated ovulation, fertile windows and predicted periods for past,
+ * current and the next three months. A day-detail sheet for flow and symptoms,
+ * End period, history, coming up. Estimates are always labelled as such and are
+ * never a method of contraception. Breastfeeding shows as context only.
  */
 
 const FLOWS: BleedingLevel[] = ['spotting', 'light', 'medium', 'heavy'];
@@ -44,11 +46,21 @@ export function CycleScreen() {
   if (!state.her.cycle.active) return <Navigate to="/me" replace />;
   const days = state.her.cycle.periodDays ?? [];
   const periodDay = currentPeriodDay(state, now);
+  const timeline = cycleTimeline(days, now);
   const estimate = nextPeriodEstimate(days);
+  const today = toISODate(now);
   const runs = periodRuns(days).reverse();
   const lengths = cycleLengths(days);
   const feeding = [...new Set(state.children.flatMap((c) => c.feeding))].join(', ');
+  const dayN = cycleDayNumber(days, now);
+  // The fertile window still ahead of her (or under way): this cycle's, else the next one.
+  const window = timeline?.cycles.find((c) => c.kind !== 'past' && c.fertileEnd >= today);
+  const upcoming = timeline?.cycles.filter((c) => c.kind === 'predicted') ?? [];
+  const byStart = new Map(timeline?.cycles.map((c) => [c.start, c]));
 
+  const first = periodStarts(days)[0];
+  const minMonth = startOfMonth(first ? new Date(`${first}T00:00:00`) : now);
+  const maxMonth = addMonths(startOfMonth(now), timeline ? PREDICT_MONTHS : 0);
   const gridStart = startOfWeek(startOfMonth(month), { weekStartsOn: 1 });
   const cells = Array.from({ length: 42 }, (_, i) => addDays(gridStart, i)).filter((d, i) => i < 35 || d <= endOfMonth(month));
 
@@ -61,19 +73,27 @@ export function CycleScreen() {
         <h1 className="type-greeting text-ink">{S.cycleTitle.text}</h1>
       </div>
 
-      <section className="flex flex-col gap-3 rounded-card bg-surface p-5">
-        <h2 className="type-insight text-ink">{periodDay ? t(S.cyclePeriodDay, { n: periodDay }) : S.cycleNoPeriod.text}</h2>
-        {estimate ? (
+      <section className="flex flex-col gap-3 rounded-card bg-surface p-5" data-testid="cycle-summary">
+        <div className="flex flex-col gap-1">
+          <h2 className="type-insight text-ink">{periodDay ? t(S.cyclePeriodDay, { n: periodDay }) : S.cycleNoPeriod.text}</h2>
+          {!periodDay && dayN ? <p className="font-sans text-[13px] text-ink-2">{t(S.cycleDayN, { n: dayN })}</p> : null}
+        </div>
+        {timeline && estimate ? (
           <>
-            <p className="font-sans text-[14px] text-ink">{t(S.cycleEstimate, { date: formatDayMonth(estimate) })}</p>
-            <Copy as="p" entry={S.cycleEstimateNote} className="font-sans text-[12px] text-ink-2" />
+            <ul className="flex flex-col gap-1.5 font-sans text-[14px] text-ink">
+              <li>{t(S.cycleEstimate, { date: formatDayMonth(estimate) })}</li>
+              {window ? <li>{t(S.cycleFertileEstimate, dayRange(window.fertileStart, window.fertileEnd))}</li> : null}
+              {window ? <li>{t(S.cycleOvulationEstimate, { date: formatDayMonth(window.ovulation) })}</li> : null}
+            </ul>
+            <p className="font-sans text-[12px] text-ink-2">{t(S.cycleRange, { n: numberWord(lengths.length), min: timeline.shortest, max: timeline.longest })}</p>
+            <Copy as="p" entry={S.cycleEstimateFraming} className="font-sans text-[12px] text-ink-2" />
           </>
         ) : (
           <Copy as="p" entry={S.cycleTooEarly} className="type-body text-ink-2" />
         )}
         {feeding ? <p className="font-sans text-[12px] text-ink-2">{t(S.cycleFeedingContext, { feeding })}</p> : null}
         <div className="flex flex-wrap gap-3 pt-1">
-          <PrimaryButton tone="ink" onClick={() => setDay(toISODate(now))}>
+          <PrimaryButton tone="ink" onClick={() => setDay(today)}>
             {S.cycleLogToday.text}
           </PrimaryButton>
           {periodDay ? (
@@ -84,11 +104,11 @@ export function CycleScreen() {
 
       <section aria-label={format(month, 'MMMM yyyy')} className="flex flex-col gap-3 rounded-card bg-surface p-4">
         <div className="flex items-center justify-between">
-          <button type="button" aria-label={S.cyclePrevMonth.text} onClick={() => setMonth((m) => addMonths(m, -1))} className="grid size-11 rotate-180 place-items-center text-ink-2">
+          <button type="button" aria-label={S.cyclePrevMonth.text} disabled={month <= minMonth} onClick={() => setMonth((m) => addMonths(m, -1))} className="grid size-11 rotate-180 place-items-center text-ink-2 disabled:opacity-30">
             <Chevron />
           </button>
           <h2 className="type-insight-sm text-ink">{format(month, 'MMMM yyyy')}</h2>
-          <button type="button" aria-label={S.cycleNextMonth.text} disabled={isSameMonth(month, now)} onClick={() => setMonth((m) => addMonths(m, 1))} className="grid size-11 place-items-center text-ink-2 disabled:opacity-30">
+          <button type="button" aria-label={S.cycleNextMonth.text} disabled={month >= maxMonth} onClick={() => setMonth((m) => addMonths(m, 1))} className="grid size-11 place-items-center text-ink-2 disabled:opacity-30">
             <Chevron />
           </button>
         </div>
@@ -100,42 +120,66 @@ export function CycleScreen() {
         <div role="grid" aria-label={format(month, 'MMMM yyyy')} className="flex flex-col gap-y-1">
           {Array.from({ length: Math.ceil(cells.length / 7) }, (_, r) => cells.slice(r * 7, r * 7 + 7)).map((week) => (
             <div role="row" key={toISODate(week[0]!)} className="grid grid-cols-7">
-          {week.map((d) => {
-            const iso = toISODate(d);
-            const inMonth = isSameMonth(d, month);
-            const period = days.includes(iso);
-            const flow = period ? periodLogFor(state, iso)?.flow : undefined;
-            const isToday = isSameDay(d, now);
-            const future = d > now;
-            const isEstimate = estimate && iso >= estimate && iso < addDaysISO(estimate, 4) && !period;
-            return (
-              <button
-                key={iso}
-                type="button"
-                role="gridcell"
-                disabled={future}
-                aria-label={t(S.cycleDayA11y, { date: formatLongDate(d), state: `${period ? t(S.cycleDayPeriod, { flow: flow ?? 'logged' }) : ''}${isToday ? S.cycleDayToday.text : ''}` })}
-                onClick={() => setDay(iso)}
-                className={`mx-auto grid size-11 place-items-center rounded-full font-sans text-[13px] tabular-nums ${!inMonth ? 'text-ink-faint' : future ? 'text-ink-faint' : 'text-ink'} ${period ? 'bg-chip-her-bg font-semibold text-chip-her-fg' : ''} ${isToday ? 'ring-1 ring-ink' : ''} ${isEstimate ? 'border border-dashed border-chip-her-fg' : ''}`}
-              >
-                {format(d, 'd')}
-              </button>
-            );
-          })}
+              {week.map((d) => {
+                const iso = toISODate(d);
+                const inMonth = isSameMonth(d, month);
+                const info = cycleDay(timeline, days, iso);
+                const flow = info.period === 'logged' ? periodLogFor(state, iso)?.flow : undefined;
+                const isToday = isSameDay(d, now);
+                const future = d > now;
+                const label = [
+                  info.period === 'logged' ? t(S.cycleDayPeriod, { flow: flow ?? 'logged' }) : '',
+                  info.period === 'predicted' ? S.cycleDayPredicted.text : '',
+                  info.ovulation ? S.cycleDayOvulation.text : info.fertile ? S.cycleDayFertile.text : '',
+                  isToday ? S.cycleDayToday.text : '',
+                ].join('');
+                return (
+                  <div role="gridcell" key={iso} className={`grid place-items-center ${!inMonth ? 'opacity-40' : ''}`}>
+                    <button
+                      type="button"
+                      disabled={future}
+                      aria-label={t(S.cycleDayA11y, { date: formatLongDate(d), state: label })}
+                      onClick={() => setDay(iso)}
+                      className={`grid size-11 place-items-center rounded-full font-sans text-[13px] tabular-nums ${cellTone(info, future)} ${isToday ? 'ring-1 ring-ink' : ''}`}
+                    >
+                      {format(d, 'd')}
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           ))}
         </div>
+        {timeline ? <Legend /> : null}
       </section>
+
+      {upcoming.length ? (
+        <Section label={S.cycleUpcoming.text}>
+          <ListCard>
+            {upcoming.map((c) => (
+              <ListRow
+                key={c.start}
+                label={t(S.cycleUpcomingRow, { date: formatDayMonth(c.start) })}
+                sublabel={t(S.cycleUpcomingDetail, { ...dayRange(c.fertileStart, c.fertileEnd), date: formatDayMonth(c.ovulation) })}
+              />
+            ))}
+          </ListCard>
+        </Section>
+      ) : null}
 
       <Section label={S.cycleHistory.text}>
         <ListCard>
-          {runs.map((r, i) => (
-            <ListRow
-              key={r.start}
-              label={r.length === 1 ? t(S.cyclePeriodRunOne, { start: formatDayMonth(r.start) }) : t(S.cyclePeriodRun, { start: formatDayMonth(r.start), n: r.length })}
-              value={i === 0 ? S.cycleCurrent.text : lengths[runs.length - 1 - i] ? t(S.cycleLength, { n: lengths[runs.length - 1 - i]! }) : ''}
-            />
-          ))}
+          {runs.map((r, i) => {
+            const est = byStart.get(r.start);
+            return (
+              <ListRow
+                key={r.start}
+                label={r.length === 1 ? t(S.cyclePeriodRunOne, { start: formatDayMonth(r.start) }) : t(S.cyclePeriodRun, { start: formatDayMonth(r.start), n: r.length })}
+                sublabel={est?.kind === 'past' ? t(S.cycleHistoryOvulation, { date: formatDayMonth(est.ovulation) }) : undefined}
+                value={i === 0 ? S.cycleCurrent.text : lengths[runs.length - 1 - i] ? t(S.cycleLength, { n: lengths[runs.length - 1 - i]! }) : ''}
+              />
+            );
+          })}
         </ListCard>
       </Section>
 
@@ -146,6 +190,38 @@ export function CycleScreen() {
       <DaySheet date={day} onClose={() => setDay(null)} />
       <PregnantAgainSheet open={preg} onOpenChange={setPreg} />
     </div>
+  );
+}
+
+/** Logged period: filled. Predicted period: dashed outline. Fertile window: light olive. Ovulation: olive ring. */
+function cellTone(info: ReturnType<typeof cycleDay>, future: boolean): string {
+  if (info.period === 'logged') return 'bg-chip-her-bg font-semibold text-chip-her-fg';
+  const text = future ? 'text-ink-2' : 'text-ink';
+  if (info.period === 'predicted') return `border border-dashed border-chip-her-fg text-chip-her-fg`;
+  if (info.ovulation) return `border-2 border-olive-500 bg-olive-500/25 font-semibold ${text}`;
+  if (info.fertile) return `bg-olive-500/25 ${text}`;
+  return text;
+}
+
+/** "4 to 9 September", or "30 November to 5 December" across months. */
+function dayRange(start: string, end: string) {
+  return start.slice(0, 7) === end.slice(0, 7) ? { start: String(Number(start.slice(8))), end: formatDayMonth(end) } : { start: formatDayMonth(start), end: formatDayMonth(end) };
+}
+
+function Legend() {
+  const item = (swatch: string, label: string) => (
+    <li className="flex items-center gap-1.5 whitespace-nowrap">
+      <span aria-hidden className={`size-3.5 shrink-0 rounded-full ${swatch}`} />
+      {label}
+    </li>
+  );
+  return (
+    <ul className="flex flex-wrap gap-x-4 gap-y-2 border-t border-line pt-3 font-sans text-[12px] text-ink-2" data-testid="cycle-legend">
+      {item('bg-chip-her-bg', S.cycleLegendPeriod.text)}
+      {item('border border-dashed border-chip-her-fg', S.cycleLegendPredicted.text)}
+      {item('bg-olive-500/25', S.cycleLegendFertile.text)}
+      {item('border-2 border-olive-500 bg-olive-500/25', S.cycleLegendOvulation.text)}
+    </ul>
   );
 }
 
