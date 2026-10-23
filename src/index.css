@@ -1,0 +1,177 @@
+@import 'tailwindcss';
+@import './design/tokens.css';
+
+/* Self-hosted fonts (PRD 16.1). Lora for display, Inter for UI (consolidated, 2026-10-01). */
+@import '@fontsource/lora/400.css';
+@import '@fontsource/lora/400-italic.css';
+@import '@fontsource/lora/500.css';
+@import '@fontsource/lora/700.css';
+@import '@fontsource/inter/400.css';
+@import '@fontsource/inter/500.css';
+@import '@fontsource/inter/600.css';
+@import '@fontsource/inter/700.css';
+
+/* ---------- Type scale (from Figma, see docs/FIGMA-DEVIATIONS.md for PRD differences) ---------- */
+@utility type-greeting {
+  font-family: var(--font-serif);
+  font-size: 28px;
+  line-height: 1.28;
+}
+@utility type-sheet-title {
+  font-family: var(--font-serif);
+  font-size: 24px;
+  line-height: 1.3;
+}
+@utility type-insight {
+  font-family: var(--font-serif);
+  font-size: 20px;
+  line-height: 1.3;
+}
+@utility type-insight-sm {
+  font-family: var(--font-serif);
+  font-size: 18px;
+  line-height: 1.3;
+}
+@utility type-card-title {
+  font-family: var(--font-serif);
+  font-weight: 500;
+  font-size: 20px;
+  line-height: 1.3;
+}
+@utility type-prompt {
+  font-family: var(--font-serif);
+  font-size: 15px;
+  line-height: 1.3;
+}
+@utility type-kpi {
+  font-family: var(--font-serif);
+  font-size: 28px;
+  line-height: 1.28;
+  font-variant-numeric: lining-nums;
+}
+@utility type-stat {
+  font-family: var(--font-serif);
+  font-weight: 500;
+  font-size: 20px;
+  line-height: 1.3;
+}
+@utility type-hero {
+  font-family: var(--font-serif);
+  font-size: 48px;
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+@utility type-dial {
+  font-family: var(--font-serif);
+  font-size: 36px;
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+@utility type-name {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 1.28;
+}
+@utility type-row {
+  font-family: var(--font-sans);
+  font-weight: 500;
+  font-size: 15px;
+  line-height: 1.25;
+}
+@utility type-body {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.4;
+}
+@utility type-secondary {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.3;
+}
+@utility type-caption {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 1.3;
+}
+@utility type-micro {
+  font-family: var(--font-sans);
+  font-weight: 700;
+  font-size: 11px;
+  line-height: 1.25;
+  text-transform: uppercase;
+}
+@utility type-chip {
+  font-family: var(--font-sans);
+  font-weight: 500;
+  font-size: 10px;
+  line-height: 1.25;
+}
+@utility type-nav {
+  font-family: var(--font-sans);
+  font-weight: 500;
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+/* Minimum 44 x 44 hit area without changing the visual size (PRD 15). */
+@utility hit-44 {
+  position: relative;
+  &::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max(100%, var(--tap));
+    height: max(100%, var(--tap));
+    transform: translate(-50%, -50%);
+  }
+}
+
+@layer base {
+  html,
+  body {
+    background: var(--color-bg);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    margin: 0;
+  }
+  button {
+    cursor: pointer;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-sage-600);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+}
+
+/* Reduced motion (7.6, 15). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Brief fill on hydration increment (7.6). */
+@keyframes segment-fill {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+.animate-segment-fill {
+  transform-origin: left;
+  animation: segment-fill 240ms var(--ease-calm);
+}
