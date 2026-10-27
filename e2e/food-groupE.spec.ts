@@ -7,7 +7,9 @@ test.beforeEach(async ({ page }) => start(page, 'D5'));
 
 test('Today shows the meal card (S02) and the curd prompt', async ({ page }) => {
   const device = page.locator('#device');
-  await expect(device.getByText('Today’s lunch')).toBeVisible();
+  await expect(device.getByText('Today’s meals')).toBeVisible();
+  await expect(device.getByTestId('meal-lead').getByText('Lunch', { exact: true })).toBeVisible();
+  await expect(device.getByRole('button', { name: 'View recipe for Rice + chicken stew' })).toBeVisible();
   await expect(device.getByRole('heading', { name: 'Rice + chicken stew' })).toBeVisible();
   await expect(device.getByText('Ingredients already introduced safely')).toBeVisible();
   await expect(device.getByRole('heading', { name: 'Curd introduced today.' })).toBeVisible();
@@ -126,7 +128,7 @@ test('the meal card shows the next meal; the whole day opens on demand', async (
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');
   await expect(card.getByText('Breakfast', { exact: true })).toHaveCount(0);
   await toggle.click();
-  await expect(card.getByRole('button', { name: 'Hide other meals' })).toHaveAttribute('aria-expanded', 'true');
+  await expect(card.getByRole('button', { name: 'Show less' })).toHaveAttribute('aria-expanded', 'true');
   await expect(card.getByText('Breakfast', { exact: true })).toBeVisible();
   await expect(card.getByText('Ragi, banana')).toBeVisible();
   await expect(card.getByText('Snack', { exact: true })).toBeVisible();
@@ -137,15 +139,20 @@ test('the meal card shows the next meal; the whole day opens on demand', async (
   await expect(page).toHaveURL(/slot=dinner/);
   await page.locator('#device').getByRole('button', { name: 'Mark as fed' }).click();
   await expect(page.locator('#device').getByText(/logged as dinner\./)).toBeVisible();
-  await expect(card.getByText('Today’s lunch')).toBeVisible(); // lunch still leads until it is logged
+  await expect(card.getByTestId('meal-lead').getByText('Lunch', { exact: true })).toBeVisible(); // lunch still leads until it is logged
   await expectTapTargets(page);
 });
 
-test('recipe: ingredients, steps, Mark as fed logs the meal', async ({ page }) => {
+test('recipe: times, ingredient quantities, steps, Mark as fed logs the meal', async ({ page }) => {
   const device = page.locator('#device');
-  await device.getByRole('button', { name: 'View recipe', exact: true }).click();
+  await device.getByRole('button', { name: 'View recipe for Rice + chicken stew' }).click();
   await expect(device.getByRole('heading', { name: 'Rice + chicken stew' })).toBeVisible();
   await expect(device.getByText('Shred the chicken finely.')).toBeVisible();
+  await expect(device.getByRole('img', { name: 'Rice + chicken stew, served in a small bowl' })).toBeVisible();
+  await expect(device.getByTestId('recipe-times')).toContainText('10 min');
+  await expect(device.getByTestId('recipe-times')).toContainText('35 min');
+  await expect(device.getByText('40 g, boneless')).toBeVisible();
+  await expect(device.getByText('1 cup', { exact: true })).toBeVisible();
   await device.getByRole('button', { name: 'Mark as fed' }).click();
   await expect(device.getByText('Rice + chicken stew logged as lunch.')).toBeVisible();
   await expect(device.getByRole('heading', { name: 'Rice + chicken stew' })).toHaveCount(0); // not repeated within three days
