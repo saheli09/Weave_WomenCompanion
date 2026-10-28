@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { ANCHOR, expectTapTargets } from './helpers';
 
-/** B01 (9.13): a fresh install opens on onboarding; five screens on every path; the first Today greets her once. */
+/** B01 (9.13): a fresh install opens on onboarding; three screens on every path; the first Today greets her once. */
 
 async function freshInstall(page: Page) {
   await page.clock.install({ time: ANCHOR });
@@ -17,7 +17,8 @@ test('a fresh install opens on the welcome screen, not on sample data', async ({
   const d = page.locator('#device');
   await expect(page).toHaveURL(/\/onboarding$/);
   await expect(d.getByRole('heading', { name: 'Weave follows you both.' })).toBeVisible();
-  await expect(d.getByRole('list', { name: /Weave covers pregnancy/ })).toBeVisible();
+  await expect(d.getByRole('button', { name: 'Continue with Google' })).toBeVisible();
+  await expect(d.getByRole('button', { name: 'Continue with Apple' })).toBeVisible();
   await expect(d.getByRole('navigation')).toHaveCount(0);
   await expectTapTargets(page);
   await page.goto('/baby'); // every route leads back here until she finishes
@@ -34,31 +35,32 @@ test('"Look around with sample data" opens the demo Today', async ({ page }) => 
   await expect(page).toHaveURL(/\/today$/); // stays out of onboarding once chosen
 });
 
-test('pregnant, from her last period: five steps, the week shown, then a pregnancy Today with a one-time welcome', async ({ page }) => {
+test('"Continue with Google" says accounts are coming and carries on to the situation step', async ({ page }) => {
   await freshInstall(page);
   const d = page.locator('#device');
-  await d.getByRole('button', { name: 'Get started' }).click();
+  await d.getByRole('button', { name: 'Continue with Google' }).click();
+  await expect(d.getByText('Accounts are coming soon. For now, everything stays on this phone.')).toBeVisible();
+  await expect(step(page)).toHaveAttribute('aria-valuenow', '2');
+  await expect(d.getByRole('heading', { name: 'Where are you right now?' })).toBeVisible();
+});
+
+test('pregnant, from her last period: three steps, the week shown, then a pregnancy Today with a one-time welcome', async ({ page }) => {
+  await freshInstall(page);
+  const d = page.locator('#device');
+  await d.getByRole('button', { name: 'Continue without an account' }).click();
   await expect(step(page)).toHaveAttribute('aria-valuenow', '2');
   await expect(d.getByRole('button', { name: 'Continue' })).toBeDisabled();
   await d.getByRole('radio', { name: 'I’m pregnant', exact: true }).click();
   await d.getByRole('button', { name: 'Continue' }).click();
   await expect(step(page)).toHaveAttribute('aria-valuenow', '3');
   await expect(d.getByRole('heading', { name: 'About you' })).toBeVisible();
+  await expect(d.getByText('Everything you log stays on this phone.', { exact: false })).toBeVisible();
   await d.getByLabel('Your name').fill('Asha');
-  await d.getByRole('button', { name: 'Continue' }).click();
+  await d.getByRole('button', { name: 'Open Weave' }).click();
   await expect(d.getByText('Add a date.')).toBeVisible();
   await d.getByRole('button', { name: 'Not sure? Use your last period' }).click();
   await d.getByLabel('First day of your last period').fill('2026-04-01');
   await expect(d.getByText('Week 21. Due 6 January.')).toBeVisible();
-  await d.getByRole('button', { name: 'Continue' }).click();
-  await expect(step(page)).toHaveAttribute('aria-valuenow', '4');
-  await expect(d.getByRole('heading', { name: 'A few preferences' })).toBeVisible();
-  await expect(d.getByText(/How is .* fed\?/)).toHaveCount(0); // no child, no feeding question
-  await d.getByLabel('Anyone sharing the load? (optional)').fill('Rohan');
-  await d.getByRole('button', { name: 'Continue' }).click();
-  await expect(step(page)).toHaveAttribute('aria-valuenow', '5');
-  await expect(d.getByRole('heading', { name: 'Your data stays with you' })).toBeVisible();
-  await expect(d.getByText('Week 21. Due 6 January.')).toBeVisible(); // summary
   await expectTapTargets(page);
   await d.getByRole('button', { name: 'Open Weave' }).click();
 
@@ -66,17 +68,17 @@ test('pregnant, from her last period: five steps, the week shown, then a pregnan
   await expect(d.locator('[data-today-state="pregnancy"]')).toBeVisible();
   const welcome = d.getByTestId('welcome-card');
   await expect(welcome.getByText('Welcome, Asha.')).toBeVisible();
-  await expect(welcome.getByRole('button', { name: 'Add a medicine' })).toBeVisible();
-  await welcome.getByRole('button', { name: 'Got it' }).click();
-  await expect(welcome).toHaveCount(0);
-  await page.reload();
+  await expect(welcome.getByRole('button', { name: 'Got it' })).toHaveCount(0); // one action only
+  await welcome.getByRole('button', { name: 'Add a medicine' }).click(); // taking the first step retires it
+  await expect(page).toHaveURL(/\/me\/medicines$/);
+  await page.goto('/today');
   await expect(d.getByTestId('welcome-card')).toHaveCount(0);
 });
 
-test('have a baby: age shown as she types, feeding preset from age, baby Today', async ({ page }) => {
+test('have a baby: age shown as she types, straight to a baby Today', async ({ page }) => {
   await freshInstall(page);
   const d = page.locator('#device');
-  await d.getByRole('button', { name: 'Get started' }).click();
+  await d.getByRole('button', { name: 'Continue without an account' }).click();
   await d.getByRole('radio', { name: 'I have a baby', exact: true }).click();
   await d.getByRole('button', { name: 'Continue' }).click();
   await expect(d.getByRole('heading', { name: 'About you and your baby' })).toBeVisible();
@@ -86,10 +88,6 @@ test('have a baby: age shown as she types, feeding preset from age, baby Today',
   await expect(d.getByText('That date is in the future.')).toBeVisible();
   await d.getByLabel('Child’s date of birth').fill('2026-08-01');
   await expect(d.getByText('Mira is 3 weeks old.')).toBeVisible();
-  await d.getByRole('button', { name: 'Continue' }).click();
-  await expect(d.getByText('How is Mira fed?')).toBeVisible();
-  await expect(d.getByRole('button', { name: 'Breastfeed' })).toHaveAttribute('aria-pressed', 'true');
-  await d.getByRole('button', { name: 'Continue' }).click();
   await d.getByRole('button', { name: 'Open Weave' }).click();
   await expect(d.locator('[data-today-state="postpartum_baby"]')).toBeVisible();
   await expect(d.getByTestId('welcome-card').getByRole('button', { name: 'Log something' })).toBeVisible();
@@ -98,32 +96,41 @@ test('have a baby: age shown as she types, feeding preset from age, baby Today',
 test('tracking my cycle: optional last period, cycle Today', async ({ page }) => {
   await freshInstall(page);
   const d = page.locator('#device');
-  await d.getByRole('button', { name: 'Get started' }).click();
+  await d.getByRole('button', { name: 'Continue without an account' }).click();
   await d.getByRole('radio', { name: 'I’m tracking my cycle', exact: true }).click();
   await d.getByRole('button', { name: 'Continue' }).click();
   await d.getByLabel('Your name').fill('Asha');
   await d.getByLabel('First day of your last period (optional)').fill('2026-08-16');
   await expect(d.getByText('Day 12 of your cycle.')).toBeVisible();
   await expect(d.getByText('Is your period still going?')).toHaveCount(0); // twelve days ago: counted as finished
-  await d.getByRole('button', { name: 'Continue' }).click();
-  await d.getByRole('button', { name: 'Continue' }).click();
   await d.getByRole('button', { name: 'Open Weave' }).click();
   await expect(d.locator('[data-today-state="cycle_only"]')).toBeVisible();
   await expect(d.getByTestId('welcome-card').getByRole('button', { name: 'Open cycle' })).toBeVisible();
   await expect(d.getByText(/Period, day/)).toHaveCount(0);
 });
 
+test('tracking my cycle with no period given: Today has no empty cycle card, only the welcome', async ({ page }) => {
+  await freshInstall(page);
+  const d = page.locator('#device');
+  await d.getByRole('button', { name: 'Continue without an account' }).click();
+  await d.getByRole('radio', { name: 'I’m tracking my cycle', exact: true }).click();
+  await d.getByRole('button', { name: 'Continue' }).click();
+  await d.getByLabel('Your name').fill('Asha');
+  await d.getByRole('button', { name: 'Open Weave' }).click();
+  await expect(d.locator('[data-today-state="cycle_only"]')).toBeVisible();
+  await expect(d.getByTestId('welcome-card').getByRole('button', { name: 'Open cycle' })).toBeVisible();
+  await expect(d.getByText('No period right now')).toHaveCount(0);
+});
+
 test('tracking my cycle: a period that began this week asks if it is still going; a finished one is not shown as ongoing', async ({ page }) => {
   await freshInstall(page);
   const d = page.locator('#device');
-  await d.getByRole('button', { name: 'Get started' }).click();
+  await d.getByRole('button', { name: 'Continue without an account' }).click();
   await d.getByRole('radio', { name: 'I’m tracking my cycle', exact: true }).click();
   await d.getByRole('button', { name: 'Continue' }).click();
   await d.getByLabel('Your name').fill('Asha');
   await d.getByLabel('First day of your last period (optional)').fill('2026-08-25');
   await d.getByRole('radio', { name: 'No, it has finished' }).click();
-  await d.getByRole('button', { name: 'Continue' }).click();
-  await d.getByRole('button', { name: 'Continue' }).click();
   await d.getByRole('button', { name: 'Open Weave' }).click();
   await expect(d.locator('[data-today-state="cycle_only"]')).toBeVisible();
   await expect(d.getByText(/Period, day/)).toHaveCount(0);
@@ -137,7 +144,7 @@ test.describe('splash, with motion on', () => {
     await expect(splash).toBeVisible();
     await expect(splash.getByText('Weave', { exact: true })).toBeVisible();
     await expect(splash).toHaveCount(0, { timeout: 4000 });
-    await expect(page.locator('#device').getByRole('button', { name: 'Get started' })).toBeVisible();
+    await expect(page.locator('#device').getByRole('button', { name: 'Continue without an account' })).toBeVisible();
   });
 });
 

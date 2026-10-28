@@ -105,11 +105,6 @@ export function StageThreads() {
   );
 }
 
-/** Colour dot for a stage row under the hero. */
-export function StageDot({ index }: { index: number }) {
-  return <span aria-hidden className="size-2.5 shrink-0 rounded-full" style={{ background: PALETTE[index] }} />;
-}
-
 /**
  * Glyph for each situation. Threads add up as life does: one for pregnancy,
  * two once there is a baby (her recovery joins), three when pregnant with a

@@ -57,21 +57,18 @@ test('history after a birth lists the archived pregnancy', async ({ page }) => {
   await expect(device.getByText('Medicines: Cipcal XT, Ferrogen XT')).toBeVisible();
 });
 
-test('onboarding: five screens to the right Today', async ({ page }) => {
+test('onboarding: three screens to the right Today', async ({ page }) => {
   await start(page, 'D3');
   const device = page.locator('#device');
   await page.goto('/onboarding');
-  await device.getByRole('button', { name: 'Get started' }).click();
+  await device.getByRole('button', { name: 'Continue without an account' }).click();
   await device.getByRole('radio', { name: 'I have a baby' }).click();
   await device.getByRole('button', { name: 'Continue' }).click();
-  await device.getByRole('button', { name: 'Continue' }).click();
+  await device.getByRole('button', { name: 'Open Weave' }).click();
   await expect(device.getByText('Add your name.')).toBeVisible();
   await device.getByLabel('Your name').fill('Asha');
   await device.getByLabel('Child’s name').fill('Mira');
   await device.getByLabel('Child’s date of birth').fill('2026-08-01');
-  await device.getByRole('button', { name: 'Continue' }).click();
-  await device.getByRole('button', { name: 'Continue' }).click();
-  await expect(device.getByRole('heading', { name: 'Your data stays with you' })).toBeVisible();
   await device.getByRole('button', { name: 'Open Weave' }).click();
   await expect(device.getByRole('heading', { name: 'Good morning, Asha' })).toBeVisible();
   await expect(device.getByText('Mira’s Age: 26d')).toBeVisible();

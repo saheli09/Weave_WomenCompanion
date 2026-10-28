@@ -44,6 +44,8 @@ const SCREENS: [persona: string, path: string][] = [
   ['D5', '/food/recipe/chicken-stew'],
   ['D5', '/food/reaction/curd'],
   ['D6', '/today'],
+  ['D7', '/today'],
+  ['D7', '/cycle'],
 ];
 
 for (const [persona, path] of SCREENS) {

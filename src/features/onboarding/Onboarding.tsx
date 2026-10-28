@@ -2,10 +2,9 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { S } from '../../content/strings';
 import { fmt } from '../../content/copy';
-import { PrimaryButton, TextAction } from '../../components/Button';
-import { Field, FieldError, fieldCls } from '../../components/Form';
+import { PrimaryButton, SecondaryButton, TextAction } from '../../components/Button';
+import { Field, fieldCls } from '../../components/Form';
 import { FilterChip } from '../../components/Chip';
-import { ListCard, ListRow } from '../../components/Cards';
 import { addDaysISO, calendarDaysBetween, childAge, formatDayMonth, PREGNANCY_DAYS, pregnancyWeek, toISODate } from '../../domain/dates';
 import { STAGE_CONFIG } from '../../domain/stage';
 import { onboard, updateSettings, type Situation } from '../../domain/transitions';
@@ -13,23 +12,30 @@ import type { FeedingMode, ISODate } from '../../domain/types';
 import { useWeave } from '../../state/store';
 import { now as clockNow } from '../../state/clock';
 import { useToast } from '../../app/Toast';
-import { SituationGlyph, StageDot, StageThreads, ThreadProgress, WeaveMark } from './Threads';
+import { SituationGlyph, StageThreads, ThreadProgress } from './Threads';
 
 /**
- * Onboarding (B01, 9.13). A fresh install opens here. Five screens for every
- * path, so the progress never skips: welcome, where are you now, the few facts
- * needed, preferences (feeding, units, who shares the load), privacy with a
- * summary. Then straight to the right Today, which greets her once.
+ * Onboarding (B01, 9.13). A fresh install opens here. Three screens for every
+ * path: welcome with sign-in, where are you now, the few facts needed. The
+ * rest has a default (feeding from the child's age, units from the phone's
+ * region) and lives in Settings, as in Flo, Clue and Huckleberry. Then
+ * straight to the right Today, which greets her once.
  */
 
 type Kind = Situation['kind'];
-const STEPS = 5;
+const STEPS = 3;
+
+/** ml and kg, except where the phone's region weighs in ounces and pounds. */
+export function unitsForLocale(locale: string | undefined): { volume: 'ml' | 'oz'; weight: 'kg' | 'lb' } {
+  const imperial = /-(US|LR|MM)\b/i.test(locale ?? '');
+  return imperial ? { volume: 'oz', weight: 'lb' } : { volume: 'ml', weight: 'kg' };
+}
 
 const SITUATIONS: { kind: Kind; label: string; hint: string }[] = [
+  { kind: 'tracking_cycle', label: S.onbTracking.text, hint: S.onbTrackingHint.text },
   { kind: 'pregnant', label: S.onbPregnant.text, hint: S.onbPregnantHint.text },
   { kind: 'have_baby', label: S.onbHaveBaby.text, hint: S.onbHaveBabyHint.text },
   { kind: 'pregnant_with_child', label: S.onbPregnantWithChild.text, hint: S.onbPregnantWithChildHint.text },
-  { kind: 'tracking_cycle', label: S.onbTracking.text, hint: S.onbTrackingHint.text },
 ];
 
 /** "26 days", "7 weeks", "14 months", "2 years": how she would say it. */
@@ -67,11 +73,6 @@ export function Onboarding() {
   const [dob, setDob] = useState('');
   const [lastPeriod, setLastPeriod] = useState('');
   const [periodOngoing, setPeriodOngoing] = useState(true);
-  const [feeding, setFeeding] = useState<FeedingMode[]>(['breast']);
-  const [feedingTouched, setFeedingTouched] = useState(false);
-  const [volume, setVolume] = useState<'ml' | 'oz'>('ml');
-  const [weight, setWeight] = useState<'kg' | 'lb'>('kg');
-  const [partner, setPartner] = useState('');
   const [tried, setTried] = useState(false);
 
   const hasChild = kind === 'have_baby' || kind === 'pregnant_with_child';
@@ -92,19 +93,16 @@ export function Onboarding() {
     (!pregnant || dueInRange) &&
     (!hasChild || (Boolean(childName.trim()) && Boolean(dob) && !dobFuture)) &&
     !(kind === 'tracking_cycle' && periodFuture);
-  const prefsOk = !hasChild || feeding.length > 0;
 
   const go = (to: number) => {
     setTried(false);
     setStep(to);
   };
-  const next = () => {
-    if (step === 3 || step === 4) {
-      setTried(true);
-      if (step === 3 ? !factsOk : !prefsOk) return;
-      if (step === 3 && hasChild && !feedingTouched) setFeeding(feedingForAge(dob, now));
-    }
-    go(step + 1);
+
+  // Accounts are UI only in this prototype (PRD: no backend), so signing in says so and carries on.
+  const signIn = () => {
+    toast(S.onbAccountToast.text);
+    go(2);
   };
 
   const sample = () => {
@@ -114,7 +112,9 @@ export function Onboarding() {
   };
 
   const finish = () => {
-    const child = { name: childName.trim(), dob, feeding };
+    setTried(true);
+    if (!factsOk) return;
+    const child = { name: childName.trim(), dob, feeding: feedingForAge(dob, now) };
     const situation: Situation =
       kind === 'pregnant'
         ? { kind, dueDate: dueISO }
@@ -124,7 +124,7 @@ export function Onboarding() {
             ? { kind, dueDate: dueISO, child }
             : { kind: 'tracking_cycle', lastPeriodStart: lastPeriod || undefined, ongoing: askOngoing && periodOngoing };
     useWeave.getState().apply((_s, at) =>
-      updateSettings(onboard(name.trim(), situation, at), { units: { volume, weight }, partnerName: partner.trim() || undefined }),
+      updateSettings(onboard(name.trim(), situation, at), { units: unitsForLocale(navigator.language) }),
     );
     useWeave.setState({ personaId: null, onboarded: true });
     navigate('/today', { replace: true });
@@ -158,7 +158,6 @@ export function Onboarding() {
               <h1 className="type-greeting text-[32px] text-ink">{S.onbWelcomeTitle.text}</h1>
               <p className="type-body text-[16px] text-ink-2">{S.onbWelcomeBody.text}</p>
             </div>
-            <Thread />
             {onboarded ? <p className="font-sans text-[12px] text-ink-2">{S.onbReplaceNote.text}</p> : null}
           </div>
         ) : null}
@@ -244,80 +243,31 @@ export function Onboarding() {
                 </div>
               </fieldset>
             ) : null}
-          </div>
-        ) : null}
-
-        {step === 4 ? (
-          <div className="flex flex-col gap-6">
-            <h1 className="type-greeting text-ink">{S.onbPrefsTitle.text}</h1>
-            {hasChild ? (
-              <fieldset className="flex flex-col gap-2">
-                <legend className="mb-2 font-sans text-[13px] font-semibold text-ink">{fmt(S.onbFeeding, { name: childName.trim() })}</legend>
-                <div className="flex flex-wrap gap-2">
-                  {(['breast', 'bottle', 'solids'] as FeedingMode[]).map((f) => (
-                    <FilterChip
-                      key={f}
-                      selected={feeding.includes(f)}
-                      onClick={() => {
-                        setFeedingTouched(true);
-                        setFeeding((xs) => (xs.includes(f) ? xs.filter((x) => x !== f) : [...xs, f]));
-                      }}
-                    >
-                      {f === 'breast' ? S.breastfeed.text : f === 'bottle' ? S.bottleFeed.text : S.solids.text}
-                    </FilterChip>
-                  ))}
-                </div>
-                <span className="font-sans text-[12px] text-ink-2">{S.onbFeedingHint.text}</span>
-                <FieldError>{tried && !prefsOk ? S.onbFeedingError.text : undefined}</FieldError>
-              </fieldset>
-            ) : null}
-            <div className="flex flex-col gap-2">
-              <span className="font-sans text-[13px] font-semibold text-ink">{S.onbUnits.text}</span>
-              <ListCard>
-                <UnitRow label={S.settingsVolume.text} options={['ml', 'oz'] as const} value={volume} onChange={setVolume} />
-                <UnitRow label={S.settingsWeight.text} options={['kg', 'lb'] as const} value={weight} onChange={setWeight} />
-              </ListCard>
-            </div>
-            <Field label={S.onbPartner.text} hint={S.onbPartnerHint.text}>
-              <input className={fieldCls} value={partner} onChange={(e) => setPartner(e.target.value)} autoComplete="off" />
-            </Field>
-          </div>
-        ) : null}
-
-        {step === 5 ? (
-          <div className="flex flex-col gap-5">
-            <WeaveMark size={56} />
-            <h1 className="type-greeting text-ink">{S.onbPrivacyTitle.text}</h1>
-            <p className="type-body text-[16px] text-ink-2">{S.onbPrivacyBody.text}</p>
-            <p className="type-body text-[16px] text-ink-2">{S.onbCareBody.text}</p>
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center justify-between">
-                <span className="font-sans text-[13px] font-semibold text-ink">{S.onbSummary.text}</span>
-                <TextAction className="text-[13px]" onClick={() => go(3)}>
-                  {S.onbChange.text}
-                </TextAction>
-              </div>
-              <ListCard>
-                <ListRow label={S.onbSummaryYou.text} value={name.trim()} />
-                {pregnancyLine ? <ListRow label={S.onbSummaryPregnancy.text} value={pregnancyLine} /> : null}
-                {hasChild ? <ListRow label={childName.trim()} value={`${ageWords(dob, now)} old`} /> : null}
-                {cycleDay ? <ListRow label={S.onbSummaryCycle.text} value={fmt(S.onbCycleLine, { n: cycleDay })} /> : null}
-              </ListCard>
+            <div className="flex flex-col gap-2 pt-2">
+              <p className="font-sans text-[13px] text-ink-2">{S.onbPrivacyLine.text}</p>
+              <p className="font-sans text-[13px] text-ink-2">{S.onbCareBody.text}</p>
             </div>
           </div>
         ) : null}
+
       </div>
 
       <div className="flex flex-col items-center gap-2">
         {step === 1 ? (
           <>
-            <PrimaryButton size="lg" tone="ink" onClick={() => go(2)}>
-              {S.onbStart.text}
+            <PrimaryButton size="lg" tone="ink" onClick={signIn}>
+              <GoogleMark />
+              {S.onbGoogle.text}
             </PrimaryButton>
+            <SecondaryButton size="lg" className="text-[16px]! font-semibold" onClick={signIn}>
+              <AppleMark />
+              {S.onbApple.text}
+            </SecondaryButton>
+            <TextAction onClick={() => go(2)}>{S.onbNoAccount.text}</TextAction>
             {onboarded ? <TextAction onClick={() => navigate(-1)}>{S.back.text}</TextAction> : <TextAction onClick={sample}>{S.onbSample.text}</TextAction>}
           </>
         ) : step < STEPS ? (
-          <PrimaryButton size="lg" tone="ink" disabled={step === 2 && !kind} onClick={next}>
+          <PrimaryButton size="lg" tone="ink" disabled={!kind} onClick={() => go(3)}>
             {S.onbNext.text}
           </PrimaryButton>
         ) : (
@@ -330,33 +280,22 @@ export function Onboarding() {
   );
 }
 
-/** The stages Weave follows, each keyed to its thread in the drawing above. */
-function Thread() {
-  const stages = [S.onbThreadPregnancy, S.onbThreadBirth, S.onbThreadCycle, S.onbThreadChild];
+/** Google's four-colour G, drawn small beside the label. */
+function GoogleMark() {
   return (
-    <ol aria-label={S.onbThreadA11y.text} className="flex flex-col gap-3">
-      {stages.map((s, i) => (
-        <li key={s.text} className="flex items-center gap-3 font-sans text-[15px] text-ink">
-          <StageDot index={i} />
-          {s.text}
-        </li>
-      ))}
-    </ol>
+    <svg aria-hidden width={18} height={18} viewBox="0 0 48 48" className="mr-2 inline-block rounded-full bg-white p-[2px] align-[-4px]">
+      <path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.7 13.3l7.9 6.1C12.5 13.6 17.8 9.5 24 9.5z" />
+      <path fill="#4285F4" d="M46.1 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.4c-.5 2.9-2.2 5.3-4.6 6.9l7.4 5.7c4.3-4 6.9-9.9 6.9-17.1z" />
+      <path fill="#FBBC05" d="M10.5 28.6c-.5-1.4-.8-3-.8-4.6s.3-3.2.8-4.6l-7.9-6.1C1 16.6 0 20.2 0 24s1 7.4 2.7 10.7l7.8-6.1z" />
+      <path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.4-5.7c-2.1 1.4-4.8 2.3-8.5 2.3-6.2 0-11.5-4.1-13.4-9.8l-7.9 6.1C6.6 42.6 14.6 48 24 48z" />
+    </svg>
   );
 }
 
-function UnitRow<T extends string>({ label, options, value, onChange }: { label: string; options: readonly T[]; value: T; onChange: (v: T) => void }) {
+function AppleMark() {
   return (
-    <li className="flex min-h-[52px] items-center justify-between gap-3">
-      <span className="type-row text-ink">{label}</span>
-      <span className="flex gap-2">
-        {options.map((u) => (
-          <FilterChip key={u} selected={value === u} onClick={() => onChange(u)}>
-            {u}
-          </FilterChip>
-        ))}
-      </span>
-    </li>
+    <svg aria-hidden width={16} height={18} viewBox="0 0 814 1000" className="mr-2 inline-block align-[-3px]" fill="currentColor">
+      <path d="M788 341c-6 4-108 62-108 190 0 148 130 200 134 202-1 3-21 72-69 142-43 62-88 124-156 124s-86-40-165-40c-77 0-104 41-166 41s-106-57-156-127C44 791 0 668 0 551c0-187 122-287 241-287 64 0 117 42 157 42 38 0 98-45 171-45 28 0 128 3 194 80zM565 166c30-35 51-85 51-134 0-7-1-14-2-19-48 2-106 32-140 73-27 31-53 81-53 131 0 8 1 15 2 18 3 1 9 2 14 2 44 0 99-29 128-71z" />
+    </svg>
   );
 }
-

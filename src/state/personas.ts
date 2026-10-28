@@ -3,7 +3,7 @@ import type { DomainState, FoodIntroduction, LogEntry, LogPayload, Medicine, Sub
 import { emptyState, iso } from '../domain/transitions';
 
 /**
- * Seed personas D1 to D6 (PRD 3.3). Each persona is written once against the
+ * Seed personas D1 to D7 (PRD 3.3, plus D7: cycle tracking only). Each persona is written once against the
  * demo anchor, Thursday 27 August 2026, 10:30 (17.1 #3 resolution), then moved
  * to the demo clock's current time when it is loaded (`buildPersona(id, now)`),
  * so the last feed is minutes ago, not days, whatever time the clock shows.
@@ -11,7 +11,7 @@ import { emptyState, iso } from '../domain/transitions';
 
 export const ANCHOR = new Date(2026, 7, 27, 10, 30, 0); // months are 0-based: 7 = August
 
-export type PersonaId = 'D1' | 'D2' | 'D3' | 'D4' | 'D5' | 'D6';
+export type PersonaId = 'D1' | 'D2' | 'D3' | 'D4' | 'D5' | 'D6' | 'D7';
 
 export const PERSONAS: { id: PersonaId; label: string; detail: string; priority: 'P0' | 'P1' }[] = [
   { id: 'D1', label: 'Pregnant, week 22', detail: 'Two prenatal medicines, appointment coming up', priority: 'P0' },
@@ -20,6 +20,7 @@ export const PERSONAS: { id: PersonaId; label: string; detail: string; priority:
   { id: 'D4', label: 'Postpartum, week 7', detail: 'Period returned, cycle tracking on', priority: 'P0' },
   { id: 'D5', label: 'Toddler, 14 months', detail: 'Solids, new food, medicine course, tin due soon', priority: 'P0' },
   { id: 'D6', label: 'Pregnant again', detail: 'Week 16 with a 14-month-old', priority: 'P1' },
+  { id: 'D7', label: 'Tracking cycle', detail: 'No pregnancy or baby, four cycles logged, day 12', priority: 'P1' },
 ];
 
 const NAME = 'Saheli';
@@ -131,6 +132,23 @@ function buildAtAnchor(id: PersonaId): DomainState {
   const b = builder(anchor, s);
 
   switch (id) {
+    case 'D7': {
+      // Cycle tracking only: no pregnancy, no child. Four periods of five days, 27 to 29 days apart; today is day 12.
+      s.her.phase = 'cycle_tracking';
+      const starts = [94, 67, 38, 11];
+      const periodDays = starts.flatMap((ago) => [0, 1, 2, 3, 4].map((i) => addDaysISO(today, -ago + i)));
+      s.her.cycle = { active: true, lastPeriodStart: addDaysISO(today, -11), periodDays };
+      const flows = ['medium', 'heavy', 'medium', 'light', 'spotting'] as const;
+      starts.forEach((ago) => {
+        flows.forEach((flow, i) => b.log(b.her, b.at(ago - i, 8, 0), { type: 'period', flow, event: i === 0 ? 'start' : 'day' }, 'sheet'));
+        b.log(b.her, b.at(ago - 4, 21, 0), { type: 'period', flow: 'spotting', event: 'end' }, 'sheet');
+      });
+      b.log(b.her, b.at(0, 8, 0), { type: 'water', glasses: 1 });
+      b.log(b.her, b.at(0, 9, 45), { type: 'water', glasses: 1 });
+      b.log(b.her, b.at(0, 7, 30), { type: 'mood', value: 'good' });
+      seedHerShortNights(b, [7.2, 6.8, 7.5]);
+      return s;
+    }
     case 'D1': {
       // Week 22 on 27 Aug 2026 -> due 31 Dec 2026 ("eighteen weeks to go").
       s.her.pregnancy = { dueDate: addDaysISO(today, 18 * 7), checklist: { birthPlanShared: true, hospitalBag: 'not_started' } };

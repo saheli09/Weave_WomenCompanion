@@ -417,14 +417,17 @@ const hasBaby = (state: DomainState) => state.children.length > 0 || state.her.p
 /** Today, cycle-only state (B26): the cycle card. */
 export function CycleCard({ state, now }: { state: DomainState; now: Date }) {
   const navigate = useNavigate();
-  if (!state.her.cycle.active) return null;
+  // Nothing logged yet: nothing to say, and the welcome card already points to the Cycle tab.
+  if (!state.her.cycle.active || !state.her.cycle.periodDays?.length) return null;
   const day = currentPeriodDay(state, now);
   const estimate = nextPeriodEstimate(state.her.cycle.periodDays ?? []);
+  // The one-time welcome card above already says estimates come after a cycle or two.
+  const welcoming = Boolean(state.prompts.welcome);
   return (
     <button type="button" onClick={() => navigate(stageTab(state, now) === 'cycle' ? '/cycle' : '/me/cycle')} className="flex w-full flex-col gap-1 rounded-card bg-surface p-5 text-left">
       <span className="type-micro text-ink-2">{S.cycleCardTitle.text}</span>
       <span className="type-insight text-ink">{day ? t(S.cyclePeriodDay, { n: day }) : estimate ? t(S.cycleEstimate, { date: formatDayMonth(estimate) }) : S.cycleNoPeriod.text}</span>
-      {!day && !estimate ? <Copy entry={hasBaby(state) ? S.cycleTooEarly : S.cycleTooEarlyNoBaby} className="type-secondary text-ink-3" /> : null}
+      {!day && !estimate && !welcoming ? <Copy entry={hasBaby(state) ? S.cycleTooEarly : S.cycleTooEarlyNoBaby} className="type-secondary text-ink-3" /> : null}
     </button>
   );
 }

@@ -65,11 +65,12 @@ export function SettingsScreen() {
   const [confirm, setConfirm] = useState(false);
   const [addingChild, setAddingChild] = useState(false);
   const set = (patch: Parameters<typeof updateSettings>[1]) => apply((s) => updateSettings(s, patch));
+  // Baby-only settings (feed volumes, formula tins) stay out of the way of someone only tracking her cycle.
+  const hasChild = state.children.length > 0;
+  const babyCare = hasChild || state.her.phase === 'postpartum';
 
-  return (
-    <div className="flex flex-col gap-6" data-screen="settings">
-      <BackHeader title={S.settingsTitle.text} />
-
+  const children = (
+    <>
       <Section label={S.settingsChildren.text}>
         <ListCard>
           {state.children.map((c) => (
@@ -79,19 +80,30 @@ export function SettingsScreen() {
         </ListCard>
       </Section>
       <AddChildSheet open={addingChild} onOpenChange={setAddingChild} />
+    </>
+  );
+
+  return (
+    <div className="flex flex-col gap-6" data-screen="settings">
+      <BackHeader title={S.settingsTitle.text} />
+
+      {/* Her children come first; with none yet, adding one waits near the end. */}
+      {hasChild ? children : null}
 
       <Section label={S.settingsUnits.text}>
         <div className="flex flex-col gap-3 rounded-card bg-surface p-5">
-          <div className="flex items-center justify-between gap-3">
-            <span className="type-row text-ink">{S.settingsVolume.text}</span>
-            <div role="radiogroup" aria-label={S.settingsVolume.text} className="flex gap-2">
-              {(['ml', 'oz'] as const).map((u) => (
-                <FilterChip key={u} role="radio" aria-checked={state.her.units.volume === u} selected={state.her.units.volume === u} onClick={() => set({ units: { volume: u } })}>
-                  {u}
-                </FilterChip>
-              ))}
+          {babyCare ? (
+            <div className="flex items-center justify-between gap-3">
+              <span className="type-row text-ink">{S.settingsVolume.text}</span>
+              <div role="radiogroup" aria-label={S.settingsVolume.text} className="flex gap-2">
+                {(['ml', 'oz'] as const).map((u) => (
+                  <FilterChip key={u} role="radio" aria-checked={state.her.units.volume === u} selected={state.her.units.volume === u} onClick={() => set({ units: { volume: u } })}>
+                    {u}
+                  </FilterChip>
+                ))}
+              </div>
             </div>
-          </div>
+          ) : null}
           <div className="flex items-center justify-between gap-3">
             <span className="type-row text-ink">{S.settingsWeight.text}</span>
             <div role="radiogroup" aria-label={S.settingsWeight.text} className="flex gap-2">
@@ -125,7 +137,9 @@ export function SettingsScreen() {
       <Section label={S.settingsNotifications.text}>
         <ListCard>
           <Toggle label={S.settingsNotifyDoses.text} checked={settings.notifications.doses} onChange={(v) => set({ settings: { notifications: { ...settings.notifications, doses: v } } })} />
-          <Toggle label={S.settingsNotifyTins.text} checked={settings.notifications.tins} onChange={(v) => set({ settings: { notifications: { ...settings.notifications, tins: v } } })} />
+          {babyCare ? (
+            <Toggle label={S.settingsNotifyTins.text} checked={settings.notifications.tins} onChange={(v) => set({ settings: { notifications: { ...settings.notifications, tins: v } } })} />
+          ) : null}
           <Toggle label={S.settingsNotifyInsights.text} checked={settings.notifications.insights} onChange={(v) => set({ settings: { notifications: { ...settings.notifications, insights: v } } })} />
         </ListCard>
         <p className="font-sans text-[12px] text-ink-2">{S.settingsNotificationsMock.text}</p>
@@ -156,6 +170,8 @@ export function SettingsScreen() {
           </ListCard>
         </div>
       </Section>
+
+      {hasChild ? null : children}
 
       <Section label={S.settingsData.text}>
         <div className="flex flex-col gap-3 rounded-card bg-surface p-5">
@@ -200,14 +216,18 @@ function SharingSheet({ onClose }: { onClose: () => void }) {
   const sharing = { ...DEFAULT_SETTINGS.sharing, ...state.settings?.sharing };
   const set = (k: keyof typeof sharing, v: boolean) => apply((s) => updateSettings(s, { settings: { sharing: { ...sharing, [k]: v } } }));
   const name = state.her.partnerName;
+  // Only what applies to her now: feeds with a baby, appointments in pregnancy, recovery after a birth.
+  const babyCare = state.children.length > 0 || state.her.phase === 'postpartum';
+  const pregnant = state.her.phase === 'pregnancy';
+  const hadBirth = state.births.length > 0 || state.her.phase === 'postpartum';
   return (
     <BottomSheet open onOpenChange={(o) => !o && onClose()} title={name ? fmt(S.shareTitle, { name }) : S.shareTitleNoName.text}>
       <div className="flex flex-col gap-4 pb-2">
         <h3 className="type-micro text-ink-3">{S.shareWhat.text}</h3>
         <ListCard className="!px-0">
-          <Toggle label={S.shareFeeds.text} checked={sharing.feeds} onChange={(v) => set('feeds', v)} />
-          <Toggle label={S.shareAppointments.text} checked={sharing.appointments} onChange={(v) => set('appointments', v)} />
-          <Toggle label={S.shareMe.text} checked={sharing.me} onChange={(v) => set('me', v)} />
+          {babyCare ? <Toggle label={S.shareFeeds.text} checked={sharing.feeds} onChange={(v) => set('feeds', v)} /> : null}
+          {pregnant ? <Toggle label={S.shareAppointments.text} checked={sharing.appointments} onChange={(v) => set('appointments', v)} /> : null}
+          <Toggle label={hadBirth ? S.shareMe.text : S.shareMeCycle.text} checked={sharing.me} onChange={(v) => set('me', v)} />
         </ListCard>
         <p className="font-sans text-[12px] text-ink-2">{S.shareMeHint.text}</p>
         <PrimaryButton size="lg" tone="ink" disabled>

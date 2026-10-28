@@ -128,7 +128,10 @@ function Compose({ state, now, todayState, insights, onFab }: { state: DomainSta
           <ScreenHeader label={date} title={greeting(now, state.her.name)} />
           {carousel}
           <CycleCard state={state} now={now} />
-          <MeCard state={state} now={now} />
+          {/* Wrapped so the card's flex-1 (for sharing a row) does not stretch it down the page. */}
+          <div>
+            <MeCard state={state} now={now} />
+          </div>
           <TodaySoFar state={state} now={now} onFab={onFab} />
         </>
       );
@@ -292,22 +295,25 @@ function MeCard({ state, now }: { state: DomainState; now: Date }) {
 
 /**
  * First Today after onboarding (9.13): one card that says what to do first for
- * her situation. "Got it" retires it for good.
+ * her situation. Taking that first step retires it for good.
  */
 function WelcomeCard({ state, todayState, onFab }: { state: DomainState; todayState: TodayState; onFab: () => void }) {
   const navigate = useNavigate();
   const apply = useWeave((s) => s.apply);
   if (!state.prompts.welcome) return null;
   const child = primaryChild(state);
-  const dismiss = () => apply((s) => ({ ...s, prompts: { ...s.prompts, welcome: undefined } }));
-  const [body, action] =
+  const [body, label, go] =
     todayState === 'pregnancy' || todayState === 'pregnancy_late' || todayState === 'pregnancy_with_child'
-      ? [S.welcomePregnancy.text, <GhostButton key="a" onClick={() => navigate('/me/medicines')}>{S.welcomeAddMedicine.text}</GhostButton>]
+      ? [S.welcomePregnancy.text, S.welcomeAddMedicine.text, () => navigate('/me/medicines')]
       : todayState === 'postpartum_solids' || todayState === 'toddler'
-        ? [t(S.welcomeSolids, { name: child?.name ?? '' }), <GhostButton key="a" onClick={onFab}>{S.welcomeLog.text}</GhostButton>]
+        ? [t(S.welcomeSolids, { name: child?.name ?? '' }), S.welcomeLog.text, onFab]
         : todayState === 'postpartum_baby'
-          ? [S.welcomeBaby.text, <GhostButton key="a" onClick={onFab}>{S.welcomeLog.text}</GhostButton>]
-          : [S.welcomeCycle.text, <GhostButton key="a" onClick={() => navigate('/me/cycle')}>{S.welcomeOpenCycle.text}</GhostButton>];
+          ? [S.welcomeBaby.text, S.welcomeLog.text, onFab]
+          : [S.welcomeCycle.text, S.welcomeOpenCycle.text, () => navigate('/me/cycle')];
+  const start = () => {
+    apply((s) => ({ ...s, prompts: { ...s.prompts, welcome: undefined } }));
+    go();
+  };
   return (
     <div data-testid="welcome-card">
       <ContextCard
@@ -315,12 +321,7 @@ function WelcomeCard({ state, todayState, onFab }: { state: DomainState; todaySt
         title={t(S.welcomeTitle, { name: state.her.name })}
         titleStyle="prompt"
         body={body}
-        actions={
-          <div className="flex items-center gap-2">
-            {action}
-            <GhostButton onClick={dismiss}>{S.welcomeDismiss.text}</GhostButton>
-          </div>
-        }
+        actions={<GhostButton onClick={start}>{label}</GhostButton>}
       />
     </div>
   );

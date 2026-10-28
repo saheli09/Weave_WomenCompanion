@@ -1,6 +1,7 @@
 import { checkInvariants } from '../domain/transitions';
 import { deriveTodayState, postpartumLabel, currentPeriodDay, deriveStage, usesFormula } from '../domain/stage';
 import { childAge, formatChildAge, formulaDaysLeft, pregnancyWeek } from '../domain/dates';
+import { cycleDayNumber } from '../domain/cycle';
 import { ANCHOR, buildPersona, PERSONAS } from './personas';
 
 describe('seed personas (3.3) on one timeline', () => {
@@ -59,9 +60,18 @@ describe('seed personas (3.3) on one timeline', () => {
     expect(deriveTodayState(s, ANCHOR)).toBe('pregnancy_with_child');
     expect(s.her.cycle.active).toBe(false);
   });
+
+  it('D7: tracking her cycle only, no pregnancy or child, day 12', () => {
+    const s = buildPersona('D7');
+    expect(s.children).toHaveLength(0);
+    expect(s.her.pregnancy).toBeUndefined();
+    expect(deriveTodayState(s, ANCHOR)).toBe('cycle_only');
+    expect(cycleDayNumber(s.her.cycle.periodDays!, ANCHOR)).toBe(12);
+    expect(currentPeriodDay(s, ANCHOR)).toBeUndefined(); // last period has ended
+  });
 });
 
-describe('seeds follow the demo clock (D1 to D6)', () => {
+describe('seeds follow the demo clock (D1 to D7)', () => {
   const TIMES = [
     new Date(2026, 7, 27, 3, 0), // small hours on the anchor day
     new Date(2026, 7, 27, 22, 45),

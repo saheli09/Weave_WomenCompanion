@@ -12,13 +12,11 @@ async function onboardFresh(page: Page, situation: string, extra: (p: Page) => P
   await start(page, 'D3');
   const d = page.locator('#device');
   await page.goto('/onboarding');
-  await d.getByRole('button', { name: 'Get started' }).click();
+  await d.getByRole('button', { name: 'Continue without an account' }).click();
   await d.getByRole('radio', { name: situation, exact: true }).click();
   await d.getByRole('button', { name: 'Continue' }).click();
   await d.getByLabel('Your name').fill('Asha');
   await extra(page);
-  await d.getByRole('button', { name: 'Continue' }).click();
-  await d.getByRole('button', { name: 'Continue' }).click(); // preferences: every path has five screens
   await d.getByRole('button', { name: 'Open Weave' }).click();
 }
 

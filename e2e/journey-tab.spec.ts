@@ -49,13 +49,11 @@ async function freshCycleTracker(page: Page) {
   await page.evaluate(() => localStorage.clear());
   await page.reload();
   const d = page.locator('#device');
-  await d.getByRole('button', { name: 'Get started' }).click();
+  await d.getByRole('button', { name: 'Continue without an account' }).click();
   await d.getByRole('radio', { name: 'I’m tracking my cycle', exact: true }).click();
   await d.getByRole('button', { name: 'Continue' }).click();
   await d.getByLabel('Your name').fill('Asha');
   await d.getByLabel('First day of your last period (optional)').fill('2026-08-16');
-  await d.getByRole('button', { name: 'Continue' }).click();
-  await d.getByRole('button', { name: 'Continue' }).click();
   await d.getByRole('button', { name: 'Open Weave' }).click();
 }
 
@@ -72,6 +70,22 @@ test('cycle tracker: Cycle is its own tab, Me has no cycle section, and + offers
   await d.getByRole('button', { name: /^Period/ }).click();
   await expect(page).toHaveURL(/\/cycle$/);
   await expect(d.getByRole('dialog')).toBeVisible(); // today's period sheet is open
+});
+
+test('cycle tracker Settings: no baby-only settings, and adding a child waits near the end', async ({ page }) => {
+  await freshCycleTracker(page);
+  const d = page.locator('#device');
+  await page.goto('/settings');
+  await expect(d.getByText('Formula tin reminders')).toHaveCount(0);
+  await expect(d.getByRole('radiogroup', { name: 'Volume' })).toHaveCount(0);
+  await expect(d.getByText('Medicine reminders')).toBeVisible();
+  const sections = (await d.locator('main h2').allInnerTexts()).map((x) => x.toLowerCase());
+  expect(sections.indexOf('children')).toBeGreaterThan(sections.indexOf('units'));
+  await d.getByRole('button', { name: 'Sharing' }).click();
+  const sheet = d.getByRole('dialog');
+  await expect(sheet.getByRole('switch')).toHaveCount(1);
+  await expect(sheet.getByRole('switch', { name: 'Your cycle' })).toBeVisible();
+  await expect(sheet.getByText(/Feeds|Appointments|recovery/)).toHaveCount(0);
 });
 
 test('cycle tracker adds a child in Settings: Baby replaces Cycle and opens on the child', async ({ page }) => {
@@ -93,7 +107,12 @@ test('cycle tracker adds a child in Settings: Baby replaces Cycle and opens on t
 test('cycle tracker with no baby: nothing about postpartum or breastfeeding; the Today card opens the Cycle tab', async ({ page }) => {
   await freshCycleTracker(page);
   const d = page.locator('#device');
-  await expect(d.getByText('Too early to estimate. Weave estimates your next period once two cycles are logged.')).toBeVisible();
+  const tooEarly = d.getByText('Too early to estimate. Weave estimates your next period once two cycles are logged.');
+  await expect(tooEarly).toHaveCount(0); // the welcome card above already says it
+  await d.getByTestId('welcome-card').getByRole('button', { name: 'Open cycle' }).click();
+  await page.goto('/today');
+  await expect(d.getByTestId('welcome-card')).toHaveCount(0);
+  await expect(tooEarly).toBeVisible();
   await expect(d.getByText(/postpartum/i)).toHaveCount(0);
   await d.getByRole('button', { name: /^Cycle/ }).click();
   await expect(page).toHaveURL(/\/cycle$/);
