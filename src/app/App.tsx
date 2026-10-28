@@ -14,11 +14,13 @@ import { ExplainProvider } from '../insights/ExplainProvider';
 import { AskScreen } from '../features/ask/Ask';
 import { HistoryScreen, SettingsScreen, SharingProvider } from '../features/settings/Settings';
 import { Onboarding } from '../features/onboarding/Onboarding';
+import { Splash } from '../features/onboarding/Threads';
 import { FeedFlowProvider } from '../features/feeds/FeedSheets';
 import { SleepFlowProvider } from '../features/sleep/SleepSheet';
 import { ActivePills } from '../features/timers/ActivePills';
 import { BirthDetails, Handoff } from '../features/birth/BirthDetails';
 import { SomethingChanged } from '../features/pregnancy/SomethingChanged';
+import { PregnancyTab } from '../features/pregnancy/PregnancyTab';
 import { TimelineScreen } from '../features/timeline/Timeline';
 import { FormulaFlowProvider, FormulaStock } from '../features/formula/Formula';
 import { BabyTab, CoursesScreen, GrowthScreen, ModuleHistory, VaccinesScreen } from '../features/baby/Baby';
@@ -36,6 +38,8 @@ function DeviceLayout() {
   const setPanelOpen = useWeave((s) => s.setPanelOpen);
   const location = useLocation();
   const labourOpen = useWeave((s) => Boolean(s.domain.her.pregnancy?.labour && !s.domain.her.pregnancy.labour.endedAt));
+  // A fresh install opens on onboarding (9.13) until she finishes it or loads sample data.
+  const needsOnboarding = useWeave((s) => !s.onboarded) && location.pathname !== '/onboarding';
   useEffect(() => setFab(false), [location.pathname]);
 
   return (
@@ -62,6 +66,7 @@ function DeviceLayout() {
           />
           <main className={`absolute inset-0 flex flex-col overflow-y-auto overflow-x-hidden px-5 pt-[var(--screen-top)] [scrollbar-width:none] ${labourOpen || location.pathname === '/welcome' || location.pathname === '/onboarding' ? 'pb-8' : 'pb-[calc(var(--nav-h)+32px)]'}`}>
             <ErrorBoundary>
+              {needsOnboarding ? <Navigate to="/onboarding" replace /> : null}
               <Routes>
                 <Route path="/today" element={<Today onFab={() => { beginLog('today.empty'); setFab(true); }} />} />
                 <Route path="/me" element={<MeScreen />} />
@@ -73,6 +78,8 @@ function DeviceLayout() {
                 <Route path="/me/sleep" element={<HerSleepScreen />} />
                 <Route path="/me/medicines" element={<HerMedicinesScreen />} />
                 <Route path="/me/cycle" element={<CycleScreen />} />
+                <Route path="/cycle" element={<CycleScreen asTab />} />
+                <Route path="/pregnancy" element={<PregnancyTab />} />
                 <Route path="/baby" element={<BabyTab />} />
                 <Route path="/baby/feeding" element={<ModuleHistory kind="feeding" />} />
                 <Route path="/baby/meals" element={<ModuleHistory kind="meals" />} />
@@ -100,6 +107,7 @@ function DeviceLayout() {
           </main>
           {/* Labour mode strips Weave back to the timer (9.6): no nav, no FAB. */}
           <BottomNav hidden={labourOpen || location.pathname === '/welcome' || location.pathname === '/onboarding'} onFab={() => { beginLog('fab'); setFab(true); }} />
+          <Splash />
           <div id="sheet-root" className="pointer-events-none absolute inset-0 z-40 [&>*]:pointer-events-auto" />
           <QuickLogSheet open={fab} onOpenChange={setFab} />
           {panelOpen ? (

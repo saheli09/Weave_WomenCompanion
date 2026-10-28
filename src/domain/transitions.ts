@@ -58,10 +58,16 @@ export function emptyState(name: string, phase: HerProfile['phase']): DomainStat
 export type Situation =
   | { kind: 'pregnant'; dueDate: ISODate }
   | { kind: 'have_baby'; child: { name: string; dob: ISODate; feeding: Child['feeding'] } }
-  | { kind: 'tracking_cycle'; lastPeriodStart?: ISODate }
+  /** ongoing: her last period has not finished yet. When false, it is recorded as finished (no day guessed). */
+  | { kind: 'tracking_cycle'; lastPeriodStart?: ISODate; ongoing?: boolean }
   | { kind: 'pregnant_with_child'; dueDate: ISODate; child: { name: string; dob: ISODate; feeding: Child['feeding'] } };
 
 export function onboard(name: string, situation: Situation, now: Date): DomainState {
+  const s = onboardSituation(name, situation, now);
+  return { ...s, startedAt: iso(now), prompts: { ...s.prompts, welcome: true } };
+}
+
+function onboardSituation(name: string, situation: Situation, now: Date): DomainState {
   switch (situation.kind) {
     case 'pregnant':
       return { ...emptyState(name, 'pregnancy'), her: { ...emptyState(name, 'pregnancy').her, pregnancy: { dueDate: situation.dueDate } } };
@@ -79,10 +85,13 @@ export function onboard(name: string, situation: Situation, now: Date): DomainSt
     case 'tracking_cycle': {
       const base = emptyState(name, 'cycle_tracking');
       const start = situation.lastPeriodStart;
-      return { ...base, her: { ...base.her, cycle: { active: true, lastPeriodStart: start, periodDays: start ? [start] : [] } } };
+      const s: DomainState = { ...base, her: { ...base.her, cycle: { active: true, lastPeriodStart: start, periodDays: start ? [start] : [] } } };
+      // A finished period gets an end marker on its first day, so Today does not read "Period, day 12".
+      if (!start || situation.ongoing) return s;
+      return addLog(s, { kind: 'her' }, { type: 'period', flow: 'light', event: 'end' }, new Date(`${start}T12:00:00`), 'derived').state;
     }
     case 'pregnant_with_child': {
-      const s = onboard(name, { kind: 'have_baby', child: situation.child }, now);
+      const s = onboardSituation(name, { kind: 'have_baby', child: situation.child }, now);
       return { ...s, her: { ...s.her, phase: 'pregnancy', postpartum: undefined, pregnancy: { dueDate: situation.dueDate } } };
     }
   }

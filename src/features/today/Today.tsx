@@ -72,7 +72,13 @@ function Compose({ state, now, todayState, insights, onFab }: { state: DomainSta
   const child = primaryChild(state);
   const date = formatLongDate(now);
   const pill = child ? t(S.childAgePill, { name: child.name, age: formatChildAge(child.dob, now) }) : undefined;
-  const carousel = <InsightCarousel {...insights} />;
+  // The one-time welcome sits above the insights in every state, straight under the header.
+  const carousel = (
+    <>
+      <WelcomeCard state={state} todayState={todayState} onFab={onFab} />
+      <InsightCarousel {...insights} />
+    </>
+  );
 
   switch (todayState) {
     case 'pregnancy':
@@ -284,6 +290,42 @@ function MeCard({ state, now }: { state: DomainState; now: Date }) {
   );
 }
 
+/**
+ * First Today after onboarding (9.13): one card that says what to do first for
+ * her situation. "Got it" retires it for good.
+ */
+function WelcomeCard({ state, todayState, onFab }: { state: DomainState; todayState: TodayState; onFab: () => void }) {
+  const navigate = useNavigate();
+  const apply = useWeave((s) => s.apply);
+  if (!state.prompts.welcome) return null;
+  const child = primaryChild(state);
+  const dismiss = () => apply((s) => ({ ...s, prompts: { ...s.prompts, welcome: undefined } }));
+  const [body, action] =
+    todayState === 'pregnancy' || todayState === 'pregnancy_late' || todayState === 'pregnancy_with_child'
+      ? [S.welcomePregnancy.text, <GhostButton key="a" onClick={() => navigate('/me/medicines')}>{S.welcomeAddMedicine.text}</GhostButton>]
+      : todayState === 'postpartum_solids' || todayState === 'toddler'
+        ? [t(S.welcomeSolids, { name: child?.name ?? '' }), <GhostButton key="a" onClick={onFab}>{S.welcomeLog.text}</GhostButton>]
+        : todayState === 'postpartum_baby'
+          ? [S.welcomeBaby.text, <GhostButton key="a" onClick={onFab}>{S.welcomeLog.text}</GhostButton>]
+          : [S.welcomeCycle.text, <GhostButton key="a" onClick={() => navigate('/me/cycle')}>{S.welcomeOpenCycle.text}</GhostButton>];
+  return (
+    <div data-testid="welcome-card">
+      <ContextCard
+        tag={S.welcomeTag.text}
+        title={t(S.welcomeTitle, { name: state.her.name })}
+        titleStyle="prompt"
+        body={body}
+        actions={
+          <div className="flex items-center gap-2">
+            {action}
+            <GhostButton onClick={dismiss}>{S.welcomeDismiss.text}</GhostButton>
+          </div>
+        }
+      />
+    </div>
+  );
+}
+
 function FinishBirthDetails({ state }: { state: DomainState }) {
   const navigate = useNavigate();
   if (!state.prompts.finishBirthDetails) return null;
@@ -346,9 +388,8 @@ function TodaySoFar({ state, now, onFab }: { state: DomainState; now: Date; onFa
 
 /* ---------------- Pregnancy ---------------- */
 
-function PregnancyToday({ state, now, date, carousel, withChild }: { state: DomainState; now: Date; date: string; carousel: ReactNode; withChild?: Child }) {
-  const navigate = useNavigate();
-  const apply = useWeave((s) => s.apply);
+/** "Week 22" and "Due 14 January. Eighteen weeks to go.", shared by Today and the Pregnancy tab. */
+export function pregnancyHeading(state: DomainState, now: Date) {
   const p = state.her.pregnancy!;
   const { week, day, gestationalDays } = pregnancyWeek(p.dueDate, now);
   const late = week >= STAGE_CONFIG.labourModeFromWeek;
@@ -363,6 +404,13 @@ function PregnancyToday({ state, now, date, carousel, withChild }: { state: Doma
         : weeksToGo === 1
           ? t(S.dueLineOneWeek, { date: formatDayMonth(p.dueDate) })
           : t(S.dueLine, { date: formatDayMonth(p.dueDate), weeks: capitalise(numberWord(weeksToGo)) });
+  return { week, day, gestationalDays, late, title, subtitle };
+}
+
+function PregnancyToday({ state, now, date, carousel, withChild }: { state: DomainState; now: Date; date: string; carousel: ReactNode; withChild?: Child }) {
+  const navigate = useNavigate();
+  const apply = useWeave((s) => s.apply);
+  const { week, late, title, subtitle } = pregnancyHeading(state, now);
 
   const reading = readingForWeek(week);
 
@@ -445,7 +493,7 @@ function MoodRow({ state, now }: { state: DomainState; now: Date }) {
 }
 
 /** Coming up (9.5, B30): booked appointments, then suggested checks from config. */
-function ComingUp({ state, now, week }: { state: DomainState; now: Date; week: number }) {
+export function ComingUp({ state, now, week }: { state: DomainState; now: Date; week: number }) {
   const [target, setTarget] = useState<AppointmentTarget | null>(null);
   const appointments = state.appointments.filter((a) => a.at && parseDate(a.at) >= now).sort((a, b) => (a.at! < b.at! ? -1 : 1));
   const milestones = milestonesForWeek(week).filter((m) => !state.appointments.some((a) => a.milestoneId === m.id || (a.title === m.title.text && a.at)));
@@ -471,7 +519,7 @@ function ComingUp({ state, now, week }: { state: DomainState; now: Date; week: n
 }
 
 /** This week checklist (9.5). Hospital bag and birth plan toggle in one tap, with Undo. */
-function ThisWeek({ state, late }: { state: DomainState; late: boolean }) {
+export function ThisWeek({ state, late }: { state: DomainState; late: boolean }) {
   const openProvider = useProviderSheet();
   const { openSharing } = useSharing();
   const apply = useWeave((s) => s.apply);
@@ -562,16 +610,17 @@ export function MedicinesToday({ state, now }: { state: DomainState; now: Date }
 
 /** Compact child strip for "pregnant again with a child" (B27, P1). */
 function ChildStrip({ state, now, child }: { state: DomainState; now: Date; child: Child }) {
+  const navigate = useNavigate();
   const meal = lastMeal(state, now, child);
   return (
-    <section aria-label={child.name} className="flex w-full items-center justify-between rounded-list bg-surface px-4 py-3">
+    <button type="button" onClick={() => navigate('/baby')} aria-label={t(S.childStripA11y, { name: child.name })} className="flex min-h-[44px] w-full items-center justify-between rounded-list bg-surface px-4 py-3 text-left">
       <span className="flex items-center gap-2">
         <Avatar src={child.photo} name={child.name} />
         <span className="type-name text-ink">{child.name}</span>
         <span className="font-sans text-[12px] text-ink-2">{formatChildAge(child.dob, now)}</span>
       </span>
       <span className="font-sans text-[12px] text-ink-2">{meal ? t(S.lastMealAt, { time: formatTime(meal.at) }) : S.noMealYet.text}</span>
-    </section>
+    </button>
   );
 }
 

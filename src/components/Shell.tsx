@@ -3,6 +3,8 @@ import { NavLink } from 'react-router-dom';
 import { format } from 'date-fns';
 import { S } from '../content/strings';
 import { useNow } from '../state/clock';
+import { useWeave } from '../state/store';
+import { stageTab, type StageTab } from '../domain/stage';
 import { Gear, Icon, type IconName } from './Icon';
 import { HeaderPill } from './Chip';
 
@@ -34,17 +36,19 @@ export function StatusBar({ right }: { right?: ReactNode }) {
 }
 
 /* ---------------------------------------------------------------------------
- * BottomNav + FAB (5.1): Today, Me, [+], Baby, Ask AI.
+ * BottomNav + FAB (5.1): Today, Me, [+], her journey, Ask AI. The journey tab
+ * is Baby, Pregnancy or Cycle (stageTab, decision 2026-10-28).
  * ------------------------------------------------------------------------- */
 
-const TABS: { to: string; label: string; icon: IconName }[] = [
-  { to: '/today', label: S.navToday.text, icon: 'navToday' },
-  { to: '/me', label: S.navMe.text, icon: 'navMe' },
-  { to: '/baby', label: S.navBaby.text, icon: 'navBaby' },
-  { to: '/ask', label: S.navAsk.text, icon: 'navAsk' },
-];
+type TabDef = { to: string; label: string; icon: IconName };
 
-function Tab({ to, label, icon }: (typeof TABS)[number]) {
+const JOURNEY_TABS: Record<StageTab, TabDef> = {
+  baby: { to: '/baby', label: S.navBaby.text, icon: 'navBaby' },
+  pregnancy: { to: '/pregnancy', label: S.navPregnancy.text, icon: 'navPregnancy' },
+  cycle: { to: '/cycle', label: S.navCycle.text, icon: 'navCycle' },
+};
+
+function Tab({ to, label, icon }: TabDef) {
   return (
     <NavLink to={to} className="flex min-h-[56px] w-16 flex-col items-center justify-center gap-1">
       {({ isActive }) => (
@@ -75,15 +79,16 @@ export function FAB({ onClick }: { onClick: () => void }) {
 }
 
 export function BottomNav({ onFab, hidden }: { onFab: () => void; hidden?: boolean }) {
+  const now = useNow(60_000);
+  const journey = useWeave((s) => stageTab(s.domain, now));
   if (hidden) return null;
-  const [a, b, c, d] = TABS as [(typeof TABS)[number], (typeof TABS)[number], (typeof TABS)[number], (typeof TABS)[number]];
   return (
     <nav aria-label="Main" className="absolute inset-x-0 bottom-0 z-20 flex items-center justify-between border-t border-line bg-surface px-4 pt-3 pb-[15px]">
-      <Tab {...a} />
-      <Tab {...b} />
+      <Tab to="/today" label={S.navToday.text} icon="navToday" />
+      <Tab to="/me" label={S.navMe.text} icon="navMe" />
       <FAB onClick={onFab} />
-      <Tab {...c} />
-      <Tab {...d} />
+      <Tab {...JOURNEY_TABS[journey]} />
+      <Tab to="/ask" label={S.navAsk.text} icon="navAsk" />
     </nav>
   );
 }

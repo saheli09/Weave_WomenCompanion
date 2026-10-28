@@ -3,7 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { S } from '../../content/strings';
 import { fmt } from '../../content/copy';
 import { Copy } from '../../components/Copy';
-import { ListCard, ListRow, Section } from '../../components/Cards';
+import { AddRow, ListCard, ListRow, Section } from '../../components/Cards';
+import { AddChildSheet } from './AddChild';
+import { ageWords } from '../onboarding/Onboarding';
+import { now as clockNow } from '../../state/clock';
 import { FilterChip } from '../../components/Chip';
 import { NumberStepper } from '../../components/Stepper';
 import { Field, fieldCls } from '../../components/Form';
@@ -60,11 +63,22 @@ export function SettingsScreen() {
   const [providerPhone, setProviderPhone] = useState(state.her.provider?.phone ?? '');
   const [partner, setPartner] = useState(state.her.partnerName ?? '');
   const [confirm, setConfirm] = useState(false);
+  const [addingChild, setAddingChild] = useState(false);
   const set = (patch: Parameters<typeof updateSettings>[1]) => apply((s) => updateSettings(s, patch));
 
   return (
     <div className="flex flex-col gap-6" data-screen="settings">
       <BackHeader title={S.settingsTitle.text} />
+
+      <Section label={S.settingsChildren.text}>
+        <ListCard>
+          {state.children.map((c) => (
+            <ListRow key={c.id} size="lg" label={c.name} value={`${ageWords(c.dob, clockNow())} old`} />
+          ))}
+          <AddRow label={S.addChildRow.text} onClick={() => setAddingChild(true)} />
+        </ListCard>
+      </Section>
+      <AddChildSheet open={addingChild} onOpenChange={setAddingChild} />
 
       <Section label={S.settingsUnits.text}>
         <div className="flex flex-col gap-3 rounded-card bg-surface p-5">

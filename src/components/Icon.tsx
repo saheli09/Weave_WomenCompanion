@@ -24,6 +24,8 @@ export const ICONS = {
   navToday: '/icons/nav-today.png',
   navMe: '/icons/nav-me.svg',
   navBaby: '/icons/nav-baby.svg',
+  navPregnancy: '/icons/nav-pregnancy.svg',
+  navCycle: '/icons/nav-cycle.svg',
   navAsk: '/icons/nav-ask.svg',
   hydration: '/icons/hydration.svg',
   mood: '/icons/mood.svg',

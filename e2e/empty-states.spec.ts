@@ -6,7 +6,7 @@ import { start } from './helpers';
  * every route: nothing may fall into the error state, and empty screens say so.
  */
 
-const ROUTES = ['/today', '/me', '/me/hydration', '/me/mood', '/me/bleeding', '/me/pelvic', '/me/pain', '/me/sleep', '/me/medicines', '/me/history', '/me/cycle', '/baby', '/baby/feeding', '/baby/sleep', '/baby/diaper', '/baby/growth', '/baby/vaccines', '/baby/medicines', '/baby/formula', '/baby/food', '/timeline', '/ask', '/settings', '/changed', '/birth'];
+const ROUTES = ['/today', '/me', '/me/hydration', '/me/mood', '/me/bleeding', '/me/pelvic', '/me/pain', '/me/sleep', '/me/medicines', '/me/history', '/me/cycle', '/cycle', '/pregnancy', '/baby', '/baby/feeding', '/baby/sleep', '/baby/diaper', '/baby/growth', '/baby/vaccines', '/baby/medicines', '/baby/formula', '/baby/food', '/timeline', '/ask', '/settings', '/changed', '/birth'];
 
 async function onboardFresh(page: Page, situation: string, extra: (p: Page) => Promise<void>) {
   await start(page, 'D3');
@@ -18,12 +18,12 @@ async function onboardFresh(page: Page, situation: string, extra: (p: Page) => P
   await d.getByLabel('Your name').fill('Asha');
   await extra(page);
   await d.getByRole('button', { name: 'Continue' }).click();
-  if (await d.getByRole('heading', { name: 'Feeding and units' }).isVisible()) await d.getByRole('button', { name: 'Continue' }).click();
+  await d.getByRole('button', { name: 'Continue' }).click(); // preferences: every path has five screens
   await d.getByRole('button', { name: 'Open Weave' }).click();
 }
 
 const CASES: [string, (p: Page) => Promise<void>][] = [
-  ['I’m pregnant', async () => {}],
+  ['I’m pregnant', async (p) => { await p.locator('#device').getByLabel('Due date').fill('2027-01-14'); }],
   ['I have a baby', async (p) => { await p.locator('#device').getByLabel('Child’s name').fill('Mira'); await p.locator('#device').getByLabel('Child’s date of birth').fill('2026-08-20'); }],
   ['I’m tracking my cycle', async () => {}],
 ];

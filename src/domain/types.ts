@@ -239,11 +239,15 @@ export interface DomainState {
   customFoods?: Record<string, string>;
   /** PRD-ADDITION (B16). Optional so state saved before it existed still loads. */
   vaccinations?: VaccineRecord[];
+  /** PRD-ADDITION (9.13): when she set Weave up. Absent for sample data. */
+  startedAt?: ISODateTime;
   /** Snoozes and acknowledgements keyed by insight id (11.1, 11.3). */
   insightMemory: Record<string, { snoozedUntil?: ISODateTime; acknowledgedAt?: ISODateTime }>;
   /** Contextual cards that are snoozed or pending (9.7 "Finish your birth details", 9.8 "Not yet"). */
   prompts: {
     periodCardSnoozedUntil?: ISODateTime;
     finishBirthDetails?: { birthId: string };
+    /** The one-time "Getting started" card on her first Today after onboarding (9.13). */
+    welcome?: boolean;
   };
 }

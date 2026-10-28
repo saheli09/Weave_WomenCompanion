@@ -10,6 +10,8 @@ export const STAGE_CONFIG = {
   postpartumLabelMonths: 12,
   labourModeFromWeek: 36,
   cycleCardFromPostpartumWeek: 6,
+  /** Pregnant with a child younger than this: the Baby tab stays, since the child still needs daily logging (decision 2026-10-28). */
+  babyTabWhilePregnantUnderMonths: 24,
 } as const;
 
 export type ChildStage = 'newborn' | 'infant' | 'solids' | 'toddler';
@@ -93,4 +95,22 @@ export function usesFormula(state: DomainState, childId: string): boolean {
         l.subject.kind === 'child' && l.subject.childId === childId && l.type === 'feed' && l.mode === 'bottle' && l.content === 'formula',
     )
   );
+}
+
+/**
+ * The fourth tab follows her main journey (decision 2026-10-28). Me is how she
+ * is today; this tab is the journey over weeks and months.
+ * - Any child, unless she is pregnant and the youngest is two or older: Baby.
+ * - Pregnant: Pregnancy.
+ * - Otherwise (cycle tracking): Cycle.
+ * Adding a child or saving a birth switches it to Baby; nothing is set by hand.
+ */
+export type StageTab = 'baby' | 'pregnancy' | 'cycle';
+
+export function stageTab(state: DomainState, now: Date): StageTab {
+  const pregnant = state.her.phase === 'pregnancy' && Boolean(state.her.pregnancy);
+  const child = primaryChild(state);
+  if (child && !(pregnant && childAge(child.dob, now).totalMonths >= STAGE_CONFIG.babyTabWhilePregnantUnderMonths)) return 'baby';
+  if (pregnant) return 'pregnancy';
+  return 'cycle';
 }

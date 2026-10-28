@@ -162,3 +162,50 @@ export function cycleDayNumber(days: ISODate[], now: Date): number | undefined {
   const start = periodStarts(days).at(-1);
   return start ? calendarDaysBetween(start, now) + 1 : undefined;
 }
+
+/* ---------------------------------------------------------------------------
+ * Cycle phases (decision 2026-10-28): the cycle that holds today, split into
+ * period, follicular, fertile window, ovulation and luteal, from the same
+ * estimates as the calendar. Education, not a fertility score (PRD 2.2).
+ * ------------------------------------------------------------------------- */
+
+export type PhaseKey = 'period' | 'follicular' | 'fertile' | 'ovulation' | 'luteal';
+
+export interface CyclePhase {
+  key: PhaseKey;
+  start: ISODate;
+  end: ISODate;
+  days: number;
+}
+
+export interface CyclePhases {
+  start: ISODate;
+  length: number;
+  /** 1-based day of this cycle. */
+  day: number;
+  today: PhaseKey;
+  phases: CyclePhase[];
+}
+
+export function cyclePhases(timeline: CycleTimeline | undefined, now: Date): CyclePhases | undefined {
+  if (!timeline) return undefined;
+  const today = toISODate(now);
+  const c = timeline.cycles.find((x) => x.start <= today && today < addDaysISO(x.start, x.length));
+  if (!c) return undefined;
+  const last = addDaysISO(c.start, c.length - 1);
+  // An ongoing period counts at least the usual length, so the follicular phase does not start early.
+  const periodDays = Math.min(Math.max(c.periodDays.length, c.kind === 'current' ? timeline.averagePeriod : 0, 1), c.length);
+  const periodEnd = addDaysISO(c.start, periodDays - 1);
+  const raw: [PhaseKey, ISODate, ISODate][] = [
+    ['period', c.start, periodEnd],
+    ['follicular', addDaysISO(periodEnd, 1), addDaysISO(c.fertileStart, -1)],
+    ['fertile', c.fertileStart > periodEnd ? c.fertileStart : addDaysISO(periodEnd, 1), addDaysISO(c.ovulation, -1)],
+    ['ovulation', c.ovulation, c.ovulation],
+    ['luteal', addDaysISO(c.ovulation, 1), last],
+  ];
+  const phases = raw
+    .filter(([, s, e]) => s <= e && s <= last)
+    .map(([key, s, e]) => ({ key, start: s, end: e > last ? last : e, days: calendarDaysBetween(s, e > last ? last : e) + 1 }));
+  const now_ = phases.find((p) => p.start <= today && today <= p.end) ?? phases.at(-1)!;
+  return { start: c.start, length: c.length, day: calendarDaysBetween(c.start, today) + 1, today: now_.key, phases };
+}

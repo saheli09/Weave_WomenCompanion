@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
+import { ScreenHeader } from '../../components/Shell';
 import { addDays, addMonths, endOfMonth, format, isSameDay, isSameMonth, startOfMonth, startOfWeek } from 'date-fns';
 import { S } from '../../content/strings';
 import { Copy, t } from '../../components/Copy';
@@ -9,9 +10,11 @@ import { BottomSheet } from '../../components/Sheet';
 import { FilterChip } from '../../components/Chip';
 import { Field, fieldCls } from '../../components/Form';
 import { Chevron } from '../../components/Icon';
+import { ReviewFlag } from '../../components/ReviewFlag';
+import type { CopyEntry } from '../../content/copy';
 import { formatDayMonth, formatLongDate, numberWord, toISODate } from '../../domain/dates';
-import { currentPeriodDay } from '../../domain/stage';
-import { cycleDay, cycleDayNumber, cycleLengths, cycleTimeline, endPeriod, logPeriodDay, nextPeriodEstimate, periodRuns, periodStarts, PREDICT_MONTHS, removePeriodDay } from '../../domain/cycle';
+import { currentPeriodDay, stageTab } from '../../domain/stage';
+import { cycleDay, cycleDayNumber, cyclePhases, type PhaseKey, cycleLengths, cycleTimeline, endPeriod, logPeriodDay, nextPeriodEstimate, periodRuns, periodStarts, PREDICT_MONTHS, removePeriodDay } from '../../domain/cycle';
 import { pregnantAgain } from '../../domain/transitions';
 import type { BleedingLevel, DomainState, LogEntry } from '../../domain/types';
 import { useDomain, useWeave } from '../../state/store';
@@ -34,19 +37,33 @@ function periodLogFor(state: DomainState, date: string) {
   return state.logs.find((l): l is Extract<LogEntry, { type: 'period' }> => l.type === 'period' && l.event !== 'end' && toISODate(new Date(l.at)) === date);
 }
 
-export function CycleScreen() {
+/**
+ * The cycle screen. A tab of its own for a cycle tracker (asTab, decision
+ * 2026-10-28); under Me otherwise. "?log=today" opens today's sheet (the + Period tile).
+ */
+export function CycleScreen({ asTab = false }: { asTab?: boolean }) {
   const state = useDomain();
   const now = useNow();
   const navigate = useNavigate();
   const apply = useWeave((s) => s.apply);
   const toast = useToast();
+  const [params, setParams] = useSearchParams();
   const [month, setMonth] = useState(startOfMonth(now));
   const [day, setDay] = useState<string | null>(null);
   const [preg, setPreg] = useState(false);
-  if (!state.her.cycle.active) return <Navigate to="/me" replace />;
+  // The + Period tile lands here with ?log=today, also when this screen is already open.
+  const logToday = params.get('log') === 'today';
+  useEffect(() => {
+    if (!logToday) return;
+    setDay(toISODate(now));
+    setParams({}, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [logToday]);
+  if (!state.her.cycle.active) return <Navigate to={asTab ? '/today' : '/me'} replace />;
   const days = state.her.cycle.periodDays ?? [];
   const periodDay = currentPeriodDay(state, now);
   const timeline = cycleTimeline(days, now);
+  const phases = cyclePhases(timeline, now);
   const estimate = nextPeriodEstimate(days);
   const today = toISODate(now);
   const runs = periodRuns(days).reverse();
@@ -66,12 +83,16 @@ export function CycleScreen() {
 
   return (
     <div className="flex flex-col gap-6" data-screen="cycle">
-      <div className="flex flex-col gap-5">
-        <button type="button" onClick={() => navigate(-1)} className="hit-44 self-start type-micro text-ink-3">
-          ‹ {S.back.text}
-        </button>
-        <h1 className="type-greeting text-ink">{S.cycleTitle.text}</h1>
-      </div>
+      {asTab ? (
+        <ScreenHeader label={S.navCycle.text} title={S.cycleTitle.text} />
+      ) : (
+        <div className="flex flex-col gap-5">
+          <button type="button" onClick={() => navigate(-1)} className="hit-44 self-start type-micro text-ink-3">
+            ‹ {S.back.text}
+          </button>
+          <h1 className="type-greeting text-ink">{S.cycleTitle.text}</h1>
+        </div>
+      )}
 
       <section className="flex flex-col gap-3 rounded-card bg-surface p-5" data-testid="cycle-summary">
         <div className="flex flex-col gap-1">
@@ -86,10 +107,10 @@ export function CycleScreen() {
               {window ? <li>{t(S.cycleOvulationEstimate, { date: formatDayMonth(window.ovulation) })}</li> : null}
             </ul>
             <p className="font-sans text-[12px] text-ink-2">{t(S.cycleRange, { n: numberWord(lengths.length), min: timeline.shortest, max: timeline.longest })}</p>
-            <Copy as="p" entry={S.cycleEstimateFraming} className="font-sans text-[12px] text-ink-2" />
+            <Copy as="p" entry={hasBaby(state) ? S.cycleEstimateFraming : S.cycleEstimateFramingNoBaby} className="font-sans text-[12px] text-ink-2" />
           </>
         ) : (
-          <Copy as="p" entry={S.cycleTooEarly} className="type-body text-ink-2" />
+          <Copy as="p" entry={hasBaby(state) ? S.cycleTooEarly : S.cycleTooEarlyNoBaby} className="type-body text-ink-2" />
         )}
         {feeding ? <p className="font-sans text-[12px] text-ink-2">{t(S.cycleFeedingContext, { feeding })}</p> : null}
         <div className="flex flex-wrap gap-3 pt-1">
@@ -101,6 +122,8 @@ export function CycleScreen() {
           ) : null}
         </div>
       </section>
+
+      {phases ? <PhaseStrip phases={phases} /> : null}
 
       <section aria-label={format(month, 'MMMM yyyy')} className="flex flex-col gap-3 rounded-card bg-surface p-4">
         <div className="flex items-center justify-between">
@@ -183,6 +206,8 @@ export function CycleScreen() {
         </ListCard>
       </Section>
 
+      <AboutOvulation baby={hasBaby(state)} />
+
       <SecondaryButton size="lg" onClick={() => setPreg(true)}>
         {S.cyclePregnantAgain.text}
       </SecondaryButton>
@@ -190,6 +215,86 @@ export function CycleScreen() {
       <DaySheet date={day} onClose={() => setDay(null)} />
       <PregnantAgainSheet open={preg} onOpenChange={setPreg} />
     </div>
+  );
+}
+
+const PHASE: Record<PhaseKey, { name: CopyEntry; line: CopyEntry; bar: string }> = {
+  period: { name: S.phasePeriod, line: S.phasePeriodLine, bar: 'bg-chip-her-fg/70' },
+  follicular: { name: S.phaseFollicular, line: S.phaseFollicularLine, bar: 'bg-ink-faint/45' },
+  fertile: { name: S.phaseFertile, line: S.phaseFertileLine, bar: 'bg-olive-500/45' },
+  ovulation: { name: S.phaseOvulation, line: S.phaseOvulationLine, bar: 'bg-olive-500' },
+  luteal: { name: S.phaseLuteal, line: S.phaseLutealLine, bar: 'bg-ink-faint/25' },
+};
+
+/**
+ * Where she is in this cycle (decision 2026-10-28): one bar, each phase as wide
+ * as its days, a marker on today, then the phases with their dates. Colours
+ * match the calendar: period in her pink, the fertile window and ovulation in olive.
+ */
+function PhaseStrip({ phases }: { phases: NonNullable<ReturnType<typeof cyclePhases>> }) {
+  const current = PHASE[phases.today];
+  // The fertile window runs through ovulation day, as the summary card says; the bar draws ovulation on its own.
+  const ovulation = phases.phases.find((p) => p.key === 'ovulation');
+  const shownEnd = (p: (typeof phases.phases)[number]) => (p.key === 'fertile' && ovulation ? ovulation.start : p.end);
+  const at = ((phases.day - 0.5) / phases.length) * 100;
+  return (
+    <Section label={S.cyclePhasesLabel.text}>
+      <ReviewFlag review={S.phasePeriodLine.review} className="rounded-card">
+        <article data-testid="cycle-phases" className="flex flex-col gap-4 rounded-card bg-surface p-5">
+          <div className="flex flex-col gap-1">
+            <h3 className="type-insight-sm text-ink">{t(S.cyclePhaseToday, { phase: current.name.text, day: phases.day, length: phases.length })}</h3>
+            <p className="type-body text-ink-2">{current.line.text}</p>
+          </div>
+          <div role="img" aria-label={t(S.cyclePhasesA11y, { day: phases.day, length: phases.length, phase: current.name.text })} className="relative pt-3">
+            <span aria-hidden className="absolute top-0 size-0 -translate-x-1/2 border-x-[5px] border-t-[7px] border-x-transparent border-t-ink" style={{ left: `${at}%` }} />
+            <div className="flex h-2.5 gap-0.5 overflow-hidden rounded-full">
+              {phases.phases.map((p) => (
+                <span key={p.key} className={PHASE[p.key].bar} style={{ flexGrow: p.days, flexBasis: 0, minWidth: 3 }} />
+              ))}
+            </div>
+          </div>
+          <ul className="flex flex-col gap-2">
+            {phases.phases.map((p) => (
+              <li key={p.key} className={`flex items-center justify-between gap-3 font-sans text-[13px] ${p.key === phases.today ? 'font-semibold text-ink' : 'text-ink-2'}`}>
+                <span className="flex items-center gap-2">
+                  <span aria-hidden className={`size-2.5 shrink-0 rounded-full ${PHASE[p.key].bar}`} />
+                  {PHASE[p.key].name.text}
+                </span>
+                <span className="tabular-nums">{p.start === shownEnd(p) ? formatDayMonth(p.start) : t(S.phaseRange, dayRange(p.start, shownEnd(p)))}</span>
+              </li>
+            ))}
+          </ul>
+        </article>
+      </ReviewFlag>
+    </Section>
+  );
+}
+
+/** Plain-words reading about ovulation (decision 2026-10-28). Each answer opens on tap. */
+function AboutOvulation({ baby }: { baby: boolean }) {
+  const qa: [CopyEntry, CopyEntry][] = [
+    [S.aboutOvulationQ1, S.aboutOvulationA1],
+    [S.aboutOvulationQ2, S.aboutOvulationA2],
+    [S.aboutOvulationQ3, S.aboutOvulationA3],
+    [S.aboutOvulationQ4, baby ? S.aboutOvulationA4 : S.aboutOvulationA4NoBaby],
+    [S.aboutOvulationQ5, S.aboutOvulationA5],
+  ];
+  return (
+    <Section label={S.aboutOvulation.text}>
+      <ReviewFlag review={S.aboutOvulationA1.review} className="rounded-card">
+        <div data-testid="about-ovulation" className="flex flex-col rounded-card bg-surface px-5 [&>details+details]:border-t [&>details+details]:border-line">
+          {qa.map(([q, a]) => (
+            <details key={q.text} className="group">
+              <summary className="flex min-h-[52px] cursor-pointer list-none items-center justify-between gap-3 py-3 font-sans text-[15px] font-medium text-ink [&::-webkit-details-marker]:hidden">
+                {q.text}
+                <Chevron className="shrink-0 rotate-90 text-ink-4 transition-transform group-open:-rotate-90" />
+              </summary>
+              <p className="type-body pb-4 text-ink-2">{a.text}</p>
+            </details>
+          ))}
+        </div>
+      </ReviewFlag>
+    </Section>
   );
 }
 
@@ -306,6 +411,9 @@ function PregnantAgainSheet({ open, onOpenChange }: { open: boolean; onOpenChang
   );
 }
 
+/** Cycle copy speaks of postpartum and breastfeeding only to a mother; a cycle tracker with no baby never sees it. */
+const hasBaby = (state: DomainState) => state.children.length > 0 || state.her.phase === 'postpartum';
+
 /** Today, cycle-only state (B26): the cycle card. */
 export function CycleCard({ state, now }: { state: DomainState; now: Date }) {
   const navigate = useNavigate();
@@ -313,10 +421,10 @@ export function CycleCard({ state, now }: { state: DomainState; now: Date }) {
   const day = currentPeriodDay(state, now);
   const estimate = nextPeriodEstimate(state.her.cycle.periodDays ?? []);
   return (
-    <button type="button" onClick={() => navigate('/me/cycle')} className="flex w-full flex-col gap-1 rounded-card bg-surface p-5 text-left">
+    <button type="button" onClick={() => navigate(stageTab(state, now) === 'cycle' ? '/cycle' : '/me/cycle')} className="flex w-full flex-col gap-1 rounded-card bg-surface p-5 text-left">
       <span className="type-micro text-ink-2">{S.cycleCardTitle.text}</span>
       <span className="type-insight text-ink">{day ? t(S.cyclePeriodDay, { n: day }) : estimate ? t(S.cycleEstimate, { date: formatDayMonth(estimate) }) : S.cycleNoPeriod.text}</span>
-      {!day && !estimate ? <Copy entry={S.cycleTooEarly} className="type-secondary text-ink-3" /> : null}
+      {!day && !estimate ? <Copy entry={hasBaby(state) ? S.cycleTooEarly : S.cycleTooEarlyNoBaby} className="type-secondary text-ink-3" /> : null}
     </button>
   );
 }

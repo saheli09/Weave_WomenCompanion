@@ -1,5 +1,5 @@
 import { format } from 'date-fns';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useWeave, deleteEverything, exportEverything } from '../state/store';
 import { useNow } from '../state/clock';
 import { ANCHOR, PERSONAS } from '../state/personas';
@@ -26,6 +26,8 @@ const btn = 'min-h-[36px] rounded-md border border-[#d6d0ca] bg-white px-2.5 tex
 export function DemoPanel() {
   const { personaId, loadPersona, resetPersona, advance, setClock, demo, setReviewMarkers, domain, apply } = useWeave();
   const now = useNow(1000);
+  const navigate = useNavigate();
+  const location = useLocation();
   const timings = useMetrics((s) => s.timings);
   const clearTimings = useMetrics((s) => s.clear);
   const rows = summarise(timings);
@@ -54,7 +56,10 @@ export function DemoPanel() {
               key={p.id}
               type="button"
               data-persona={p.id}
-              onClick={() => loadPersona(p.id)}
+              onClick={() => {
+                loadPersona(p.id);
+                if (location.pathname === '/onboarding') navigate('/today', { replace: true });
+              }}
               aria-pressed={personaId === p.id}
               className={`flex min-h-[44px] flex-col items-start rounded-md border px-2.5 py-1.5 text-left ${personaId === p.id ? 'border-[#2c2523] bg-[#2c2523] text-white' : 'border-[#d6d0ca] bg-white'}`}
             >

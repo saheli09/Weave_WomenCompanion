@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { BottomSheet } from '../../components/Sheet';
 import { TileGrid, MoodChips, type Tile } from '../../components/Controls';
 import { ListCard, ChecklistRow, AddRow } from '../../components/Cards';
@@ -16,7 +17,7 @@ import { doseSlotsToday } from '../../state/selectors';
 import { S } from '../../content/strings';
 import { t } from '../../components/Copy';
 import { calendarDaysBetween } from '../../domain/dates';
-import { primaryChild, usesFormula } from '../../domain/stage';
+import { primaryChild, stageTab, usesFormula } from '../../domain/stage';
 import type { DomainState, LogEntry } from '../../domain/types';
 import { sinceLast } from '../../state/selectors';
 import { useDomain } from '../../state/store';
@@ -65,6 +66,8 @@ export function quickLogTiles(state: DomainState, now: Date, go: (id: string) =>
     tile('mood', 'mood', S.tileMood.text, sinceLast(state, now, her('mood'))),
   );
   if (state.her.phase === 'postpartum') tiles.push(tile('bleeding', 'missing', S.tileBleeding.text, sinceLast(state, now, her('bleeding'))));
+  // Her cycle is on: the period is what she logs most, so it gets a tile (decision 2026-10-28).
+  if (state.her.cycle.active) tiles.unshift(tile('period', 'missing', S.tilePeriod.text, sinceLast(state, now, (l) => l.type === 'period' && l.event !== 'end')));
   tiles.push(tile('medicine', 'missing', S.tileMedicine.text, sinceLast(state, now, her('dose'))));
   return tiles;
 }
@@ -74,6 +77,7 @@ export function QuickLogSheet({ open, onOpenChange }: { open: boolean; onOpenCha
   const now = useNow();
   const dev = useDevNotice();
   const { logWater } = useHerLogs();
+  const navigate = useNavigate();
   const { openFeed } = useFeedFlow();
   const { openSleep } = useSleepFlow();
   const { quickOpen } = useFormulaFlow();
@@ -89,6 +93,9 @@ export function QuickLogSheet({ open, onOpenChange }: { open: boolean; onOpenCha
       onOpenChange(false);
       const c = primaryChild(state);
       if (c) (id === 'feed' ? openFeed : openSleep)(c.id);
+    } else if (id === 'period') {
+      onOpenChange(false);
+      navigate(`${stageTab(state, now) === 'cycle' ? '/cycle' : '/me/cycle'}?log=today`);
     } else if (id === 'water') {
       onOpenChange(false);
       logWater('fab');

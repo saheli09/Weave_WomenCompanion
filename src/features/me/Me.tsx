@@ -15,7 +15,7 @@ import { Field, fieldCls } from '../../components/Form';
 import { EmptyState, InlineUndo, useUndo } from '../../components/States';
 import { Icon, Plus } from '../../components/Icon';
 import { formatDayMonth, formatDuration, formatLongDate, formatTimeCompact, formatTimeSince, parseDate, pregnancyWeek, toISODate } from '../../domain/dates';
-import { currentPeriodDay, postpartumLabel, STAGE_CONFIG } from '../../domain/stage';
+import { currentPeriodDay, postpartumLabel, STAGE_CONFIG, stageTab } from '../../domain/stage';
 import type { DomainState, LogEntry, MoodValue } from '../../domain/types';
 import { addLog, confirmPeriodReturn, snoozePeriodCard } from '../../domain/transitions';
 import { logPastSleep } from '../../domain/sleep';
@@ -93,7 +93,9 @@ export function MeScreen() {
     week >= STAGE_CONFIG.cycleCardFromPostpartumWeek &&
     !(state.prompts.periodCardSnoozedUntil && new Date(state.prompts.periodCardSnoozedUntil) > now);
 
-  const title = her.phase === 'postpartum' ? S.meTitlePostpartum.text : preg ? t(S.meTitlePregnancy, { n: preg.week }) : her.cycle.active ? S.meTitleCycle.text : S.meTitleNoPhase.text;
+  // Me is how she is today; the week and the cycle each have their own tab (decision 2026-10-28).
+  const journey = stageTab(state, now);
+  const title = her.phase === 'postpartum' ? S.meTitlePostpartum.text : S.meTitleNoPhase.text;
   const lastOfType = (type: LogEntry['type']) => herLogs(state).filter((l) => l.type === type && parseDate(l.at) <= now).sort((a, b) => (a.at < b.at ? 1 : -1))[0];
   const symptom = lastOfType('symptom');
   const weight = lastOfType('weight');
@@ -112,13 +114,6 @@ export function MeScreen() {
             <h2 className="type-insight text-ink">{t(S.weekPostpartum, { n: week })}</h2>
             <Copy as="p" entry={S.weekSupportLine} className="text-center font-serif text-[14px] text-ink-2 italic" />
           </div>
-        </section>
-      ) : preg ? (
-        <section aria-label={t(S.pregnancyWeekCard, { n: preg.week })} className="flex flex-col items-center gap-4 rounded-list border border-ink/8 bg-surface p-[25px] shadow-card">
-          <ProgressRing value={Math.min(1, preg.week / 40)} label={t(S.pregnancyWeekCard, { n: preg.week })}>
-            <span className="type-insight text-ink">{t(S.pregnancyWeekRing, { n: preg.week })}</span>
-          </ProgressRing>
-          <Copy as="p" entry={S.pregnancySupportLine} className="text-center font-serif text-[14px] text-ink-2 italic" />
         </section>
       ) : null}
 
@@ -190,7 +185,7 @@ export function MeScreen() {
         </ListCard>
       </Section>
 
-      {her.cycle.active || periodDay ? (
+      {journey !== 'cycle' && (her.cycle.active || periodDay) ? (
         <Section label={S.meCycle.text}>
           <ListCard>
             <ListRow size="lg" label={periodDay ? t(S.periodDay, { n: periodDay }) : S.meCycle.text} chevron onClick={() => navigate('/me/cycle')} />

@@ -138,7 +138,26 @@ test('cycle (D4): one period so far, so no estimates and no future months', asyn
   await page.goto('/me/cycle');
   const device = page.locator('#device');
   await expect(device.getByText('Too early to estimate. Postpartum cycles are often irregular.')).toBeVisible();
-  await expect(device.getByText(/fertile window/i)).toHaveCount(0);
+  await expect(device.getByTestId('cycle-summary').getByText(/fertile window/i)).toHaveCount(0);
+  await expect(device.getByRole('gridcell', { name: /fertile window/i })).toHaveCount(0);
+  await expect(device.getByTestId('cycle-phases')).toHaveCount(0); // phases need estimates
+  await expect(device.getByTestId('about-ovulation')).toBeVisible(); // the reading does not
   await expect(device.getByTestId('cycle-legend')).toHaveCount(0);
   await expect(device.getByRole('button', { name: 'Next month' })).toBeDisabled();
+});
+
+test('cycle phases and the ovulation explainer (D5): today marked, estimates labelled, not contraception', async ({ page }) => {
+  await start(page, 'D5');
+  await page.goto('/me/cycle');
+  const phases = page.locator('#device [data-testid="cycle-phases"]');
+  await expect(phases.getByRole('heading', { name: 'Today: Period, cycle day 3 of about 29' })).toBeVisible();
+  await expect(phases.getByRole('img', { name: 'Cycle day 3 of about 29. Period.' })).toBeVisible();
+  await expect(phases.getByText('Fertile window, estimate')).toBeVisible();
+  await expect(phases.getByText('4 to 9 September')).toBeVisible(); // through ovulation day, as the summary says
+  await expect(phases.getByText('Ovulation, estimate')).toBeVisible();
+  const about = page.locator('#device [data-testid="about-ovulation"]');
+  await expect(about.getByText(/not a method of contraception/)).toBeHidden(); // answers open on tap
+  await about.getByText('Can I use this to avoid pregnancy?').click();
+  await expect(about.getByText(/not a method of contraception/)).toBeVisible();
+  await expectTapTargets(page);
 });
