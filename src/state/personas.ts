@@ -1,6 +1,7 @@
 import { addDaysISO, calendarDaysBetween, formulaDiscardBy, toISODate } from '../domain/dates';
 import type { DomainState, FoodIntroduction, LogEntry, LogPayload, Medicine, Subject } from '../domain/types';
 import { emptyState, iso } from '../domain/transitions';
+import { connectDevice } from '../domain/devices';
 
 /**
  * Seed personas D1 to D7 (PRD 3.3, plus D7: cycle tracking only). Each persona is written once against the
@@ -20,7 +21,7 @@ export const PERSONAS: { id: PersonaId; label: string; detail: string; priority:
   { id: 'D4', label: 'Postpartum, week 7', detail: 'Period returned, cycle tracking on', priority: 'P0' },
   { id: 'D5', label: 'Toddler, 14 months', detail: 'Solids, new food, medicine course, tin due soon', priority: 'P0' },
   { id: 'D6', label: 'Pregnant again', detail: 'Week 16 with a 14-month-old', priority: 'P1' },
-  { id: 'D7', label: 'Tracking cycle', detail: 'No pregnancy or baby, four cycles logged, day 12', priority: 'P1' },
+  { id: 'D7', label: 'Tracking cycle', detail: 'No pregnancy or baby, day 12, Fitbit connected', priority: 'P1' },
 ];
 
 const NAME = 'Saheli';
@@ -146,12 +147,20 @@ function buildAtAnchor(id: PersonaId): DomainState {
       b.log(b.her, b.at(0, 8, 0), { type: 'water', glasses: 1 });
       b.log(b.her, b.at(0, 9, 45), { type: 'water', glasses: 1 });
       b.log(b.her, b.at(0, 7, 30), { type: 'mood', value: 'good' });
-      seedHerShortNights(b, [7.2, 6.8, 7.5]);
-      return s;
+      // Her nights, heart rate, temperature and steps come from a connected Fitbit.
+      return connectDevice(s, 'fitbit', anchor);
     }
     case 'D1': {
       // Week 22 on 27 Aug 2026 -> due 31 Dec 2026 ("eighteen weeks to go").
-      s.her.pregnancy = { dueDate: addDaysISO(today, 18 * 7), checklist: { birthPlanShared: true, hospitalBag: 'not_started' } };
+      s.her.pregnancy = {
+        dueDate: addDaysISO(today, 18 * 7),
+        checklist: {
+          birthPlanShared: true,
+          hospitalBag: 'not_started',
+          bagItems: ['nightwear', 'toiletries', 'charger', 'vests', 'hospital-file'],
+          birthPlan: { place: 'Fortis Hospital, Kolkata', companion: PARTNER, painRelief: ['Breathing and moving around', 'Decide on the day'] },
+        },
+      };
       s.medicines = prenatalMeds();
       b.log(b.her, b.at(0, 9, 45), { type: 'dose', medicineId: 'med_cipcal', takenAt: iso(b.at(0, 9, 45)), slot: 'breakfast' }); // Figma shows 10:45am, after the 10:30 anchor
       b.log(b.her, b.at(0, 8, 10), { type: 'dose', medicineId: 'med_ferrogen', takenAt: iso(b.at(0, 8, 10)), slot: 'breakfast' });

@@ -122,6 +122,32 @@ export function SegmentedProgress({ value, total = 8, label }: { value: number; 
   );
 }
 
+/**
+ * Glasses of water against the goal (decision 2026-10-29): one small glass per
+ * glass, four to a row, filled as she drinks. For tiles with room to spare.
+ */
+export function GlassesProgress({ value, total = 8, label }: { value: number; total?: number; label: string }) {
+  return (
+    <div role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={Math.min(value, total)} aria-label={label} className="grid w-full grid-cols-4 justify-items-center gap-x-1 gap-y-2">
+      {Array.from({ length: total }, (_, i) => (
+        <Glass key={i} full={i < value} fresh={i === value - 1} />
+      ))}
+    </div>
+  );
+}
+
+function Glass({ full, fresh }: { full: boolean; fresh: boolean }) {
+  // A tumbler, wider at the rim; the water sits below it.
+  const outline = 'M3 3 H21 L18.6 27.2 A2 2 0 0 1 16.6 29 H7.4 A2 2 0 0 1 5.4 27.2 Z';
+  const water = 'M4.6 10 H19.4 L18.6 27.2 A2 2 0 0 1 16.6 29 H7.4 A2 2 0 0 1 5.4 27.2 Z';
+  return (
+    <svg aria-hidden width={22} height={30} viewBox="0 0 24 32" fill="none">
+      <path d={outline} fill="var(--color-line)" fillOpacity={full ? 0 : 0.6} stroke={full ? 'var(--color-hydration)' : 'var(--color-ink-faint)'} strokeOpacity={full ? 1 : 0.6} strokeWidth={1.5} strokeLinejoin="round" />
+      {full ? <path d={water} fill="var(--color-hydration)" className={fresh ? 'animate-glass-fill' : undefined} /> : null}
+    </svg>
+  );
+}
+
 /* ---------------------------------------------------------------------------
  * ProgressRing (7.5): week ring and KPI rings.
  * ------------------------------------------------------------------------- */

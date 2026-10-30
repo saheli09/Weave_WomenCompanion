@@ -19,6 +19,8 @@ export interface WeaveStore {
   onboarded: boolean;
   clockOffsetMs: number;
   demo: { reviewMarkers: boolean; panelOpen: boolean };
+  /** Appearance (decision 2026-10-30): follow the phone, or always light or dark. A viewer preference, not her data. */
+  theme: ThemePref;
 
   /** Run a pure transition against current state and the demo clock. */
   apply: (fn: (s: DomainState, at: Date) => DomainState) => void;
@@ -31,7 +33,10 @@ export interface WeaveStore {
   advance: (ms: number) => void;
   setReviewMarkers: (on: boolean) => void;
   setPanelOpen: (open: boolean) => void;
+  setTheme: (theme: ThemePref) => void;
 }
+
+export type ThemePref = 'system' | 'light' | 'dark';
 
 export const STORAGE_KEY = 'weave-v1';
 
@@ -54,6 +59,7 @@ export const useWeave = create<WeaveStore>()(
       onboarded: false,
       clockOffsetMs: ANCHOR.getTime() - Date.now(),
       demo: { reviewMarkers: true, panelOpen: false },
+      theme: 'system',
 
       apply: (fn) => set({ domain: fn(get().domain, now()) }),
       log: (subject, payload, source = 'quick', extra) => {
@@ -77,6 +83,7 @@ export const useWeave = create<WeaveStore>()(
       },
       setReviewMarkers: (on) => set({ demo: { ...get().demo, reviewMarkers: on } }),
       setPanelOpen: (open) => set({ demo: { ...get().demo, panelOpen: open } }),
+      setTheme: (theme) => set({ theme }),
     }),
     {
       name: STORAGE_KEY,
@@ -90,7 +97,7 @@ export const useWeave = create<WeaveStore>()(
         return p as never;
       },
       storage: createJSONStorage(() => localStorage),
-      partialize: (s) => ({ domain: s.domain, personaId: s.personaId, onboarded: s.onboarded, clockOffsetMs: s.clockOffsetMs, savedAt: Date.now(), demo: { ...s.demo, panelOpen: false } }),
+      partialize: (s) => ({ domain: s.domain, personaId: s.personaId, onboarded: s.onboarded, clockOffsetMs: s.clockOffsetMs, savedAt: Date.now(), demo: { ...s.demo, panelOpen: false }, theme: s.theme }),
       onRehydrateStorage: () => (s) => {
         if (!s) return;
         const savedAt = (s as WeaveStore & { savedAt?: number }).savedAt;

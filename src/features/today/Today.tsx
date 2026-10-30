@@ -13,17 +13,18 @@ import { BleedingSheet, DiaperChooser } from '../quicklog/BabyLogs';
 import { useHerLogs } from '../quicklog/useHerLogs';
 import { useFeedFlow } from '../feeds/FeedSheets';
 import { EditLogSheet } from '../timeline/EditLogSheet';
+import { HerTiles } from '../me/Me';
+import { BirthPlanSheet, bagValue, checklistOf, HospitalBagSheet, planValue } from '../pregnancy/ChecklistSheets';
 import { CycleCard, DaySheet } from '../cycle/Cycle';
 import { FirstFoodPrompts, MealCard } from '../food/Food';
 import { useSleepFlow } from '../sleep/SleepSheet';
 import { PrimaryButton, GhostButton } from '../../components/Button';
-import { Chevron, Icon, Plus } from '../../components/Icon';
+import { Chevron } from '../../components/Icon';
 import { format } from 'date-fns';
 import { MoodSheet } from '../quicklog/QuickLogSheet';
 import { AppointmentSheet, type AppointmentTarget } from '../pregnancy/AppointmentSheet';
-import { setChecklist, startLabour } from '../../domain/transitions';
+import { startLabour } from '../../domain/transitions';
 import { LabourScreen } from '../labour/Labour';
-import { useToast } from '../../app/Toast';
 import { useProviderSheet } from '../../app/ProviderSheet';
 import { useSharing } from '../settings/Settings';
 import { formatChildAge, formatDayMonth, formatDuration, formatLongDate, formatTimeCompact, formatTimeSince, numberWord, capitalise, parseDate, pregnancyWeek, minutesSince, formatTime, toISODate } from '../../domain/dates';
@@ -43,6 +44,7 @@ import {
   latestToday,
   sleptToday,
   timelineItems,
+  waterNudge,
   waterToday,
   cap,
 } from '../../state/selectors';
@@ -126,12 +128,11 @@ function Compose({ state, now, todayState, insights, onFab }: { state: DomainSta
       return (
         <>
           <ScreenHeader label={date} title={greeting(now, state.her.name)} />
-          {carousel}
+          {/* Her period comes first for a cycle tracker: the countdown, or the day of it. */}
           <CycleCard state={state} now={now} />
-          {/* Wrapped so the card's flex-1 (for sharing a row) does not stretch it down the page. */}
-          <div>
-            <MeCard state={state} now={now} />
-          </div>
+          {carousel}
+          {/* Water and mood as two tiles side by side; her period already leads the page. */}
+          <HerTiles from="today" />
           <TodaySoFar state={state} now={now} onFab={onFab} />
         </>
       );
@@ -247,6 +248,8 @@ function MeCard({ state, now }: { state: DomainState; now: Date }) {
     setSheet(which);
   };
   const glasses = waterToday(state, now);
+  const nudge = waterNudge(state, now);
+  const nudgeText = nudge ? (nudge.kind === 'none-yet' ? S.waterNudgeNone.text : t(S.waterNudgeSince, { n: nudge.hours })) : undefined;
   const periodDay = currentPeriodDay(state, now);
   const period = latestToday(state, now, 'period');
   const bleeding = latestToday(state, now, 'bleeding');
@@ -269,11 +272,19 @@ function MeCard({ state, now }: { state: DomainState; now: Date }) {
       <SubjectCard
         name={S.herChip.text}
         avatar="/avatars/her.png"
+        // Water overdue: the card rings and the caption says since when (decision 2026-10-30).
+        className={nudgeText ? 'water-nudge ring-2 ring-hydration' : ''}
         kpi={{
           value: t(S.glassesOfGoal, { count: glasses, goal: state.her.hydrationGoalGlasses }),
           caption: (
             <>
-              <span>{S.glassesToday.text}</span>
+              {nudgeText ? (
+                <span data-testid="water-nudge" className="font-semibold text-sage-600">
+                  {nudgeText}
+                </span>
+              ) : (
+                <span>{S.glassesToday.text}</span>
+              )}
               <InlineUndo visible={Boolean(waterUndo.pendingKey)} onUndo={waterUndo.run} label={S.undo.text} />
             </>
           ),
@@ -282,7 +293,7 @@ function MeCard({ state, now }: { state: DomainState; now: Date }) {
             const id = logWater('today.her.water', { inline: true });
             waterUndo.offer(id, () => undoLogs([id]));
           },
-          addLabel: S.addGlassA11y.text,
+          addLabel: nudgeText ? `${S.addGlassA11y.text}. ${nudgeText}` : S.addGlassA11y.text,
         }}
         rows={rows}
       />
@@ -420,7 +431,8 @@ function PregnancyToday({ state, now, date, carousel, withChild }: { state: Doma
       <ScreenHeader label={date} title={title} subtitle={subtitle} />
       {carousel}
       {withChild ? <ChildStrip state={state} now={now} child={withChild} /> : null}
-      <MoodRow state={state} now={now} />
+      {/* Water and mood, the same tiles as every cycle tracker's Today (decision 2026-10-30). */}
+      <HerTiles from="today" />
       {late ? (
         <ContextCard
           titleStyle="card"
@@ -456,43 +468,6 @@ function PregnancyToday({ state, now, date, carousel, withChild }: { state: Doma
   );
 }
 
-/**
- * Mood row (decision 2026-10-05). The week-22 Figma has no mood entry on Today,
- * so mood took three taps via the FAB; this row makes it two (row, then chip).
- */
-function MoodRow({ state, now }: { state: DomainState; now: Date }) {
-  const [open, setOpen] = useState(false);
-  const mood = latestToday(state, now, 'mood');
-  const value = mood ? cap(mood.value) : S.add.text;
-  return (
-    <>
-      <ListCard>
-        <li>
-          <button
-            type="button"
-            onClick={() => {
-              beginLog('today.mood');
-              setOpen(true);
-            }}
-            aria-label={t(S.moodRowA11y, { value })}
-            className="flex min-h-[52px] w-full items-center justify-between text-left"
-          >
-            <span className="flex items-center gap-2.5">
-              <Icon name="mood" size={14} color="var(--color-ink-2)" />
-              <span className="type-row text-ink">{S.mood.text}</span>
-            </span>
-            <span className="flex items-center gap-1">
-              <span className={`type-secondary font-semibold ${mood ? 'text-ink' : 'text-ink-3'}`}>{value}</span>
-              <Plus size={9} className="text-ink-4" />
-            </span>
-          </button>
-        </li>
-      </ListCard>
-      <MoodSheet open={open} onOpenChange={setOpen} entry="today.mood" />
-    </>
-  );
-}
-
 /** Coming up (9.5, B30): booked appointments, then suggested checks from config. */
 export function ComingUp({ state, now, week }: { state: DomainState; now: Date; week: number }) {
   const [target, setTarget] = useState<AppointmentTarget | null>(null);
@@ -523,29 +498,14 @@ export function ComingUp({ state, now, week }: { state: DomainState; now: Date; 
 export function ThisWeek({ state, late }: { state: DomainState; late: boolean }) {
   const openProvider = useProviderSheet();
   const { openSharing } = useSharing();
-  const apply = useWeave((s) => s.apply);
-  const toast = useToast();
-  const p = state.her.pregnancy!;
-  const c = p.checklist ?? { birthPlanShared: false, hospitalBag: 'not_started' as const };
+  const [sheet, setSheet] = useState<'bag' | 'plan' | null>(null);
+  const c = checklistOf(state);
   const partner = state.her.partnerName;
-  const bagValue = c.hospitalBag === 'packed' ? S.packed.text : S.notStarted.text;
-  const planValue = c.birthPlanShared && partner ? t(S.sharedWith, { name: partner }) : S.notShared.text;
-  const toggleBag = () => {
-    const next = c.hospitalBag === 'packed' ? 'not_started' : 'packed';
-    apply((s) => setChecklist(s, { hospitalBag: next }));
-    toast(next === 'packed' ? S.toastBagPacked.text : S.toastBagNotStarted.text, () => apply((s) => setChecklist(s, { hospitalBag: c.hospitalBag })));
-  };
-  const togglePlan = () => {
-    const next = !c.birthPlanShared;
-    apply((s) => setChecklist(s, { birthPlanShared: next }));
-    toast(next ? t(S.toastPlanShared, { name: partner ?? '' }) : S.toastPlanUnshared.text, () => apply((s) => setChecklist(s, { birthPlanShared: c.birthPlanShared })));
-  };
-  const bag = <ListRow label={S.hospitalBag.text} value={bagValue} onClick={toggleBag} a11yLabel={t(S.checklistToggleA11y, { label: S.hospitalBag.text, value: bagValue })} />;
-  const plan = partner ? (
-    <ListRow label={S.birthPlan.text} value={planValue} onClick={togglePlan} a11yLabel={t(S.checklistToggleA11y, { label: S.birthPlan.text, value: planValue })} review={S.sharingIsMock.review} />
-  ) : (
-    <ListRow label={S.birthPlan.text} value={S.notShared.text} />
-  );
+  // Each row opens its sheet (decision 2026-10-30): a packing list, and a birth plan to fill in and share.
+  const bagText = bagValue(c);
+  const planText = planValue(c, partner);
+  const bag = <ListRow label={S.hospitalBag.text} value={bagText} chevron onClick={() => setSheet('bag')} a11yLabel={t(S.checklistOpenA11y, { label: S.hospitalBag.text, value: bagText })} />;
+  const plan = <ListRow label={S.birthPlan.text} value={planText} chevron onClick={() => setSheet('plan')} a11yLabel={t(S.checklistOpenA11y, { label: S.birthPlan.text, value: planText })} review={c.birthPlanShared ? S.sharingIsMock.review : undefined} />;
   return (
     <Section label={S.thisWeek.text}>
       <ListCard>
@@ -562,10 +522,12 @@ export function ThisWeek({ state, late }: { state: DomainState; late: boolean })
             {plan}
             {bag}
             <ListRow label={S.labourModeRow.text} value={S.readyAtWeek36.text} />
-            <ListRow label={S.sharing.text} value={partner ?? S.notShared.text} onClick={openSharing} />
+            <ListRow label={S.sharing.text} value={partner ?? S.notShared.text} chevron onClick={openSharing} />
           </>
         )}
       </ListCard>
+      <HospitalBagSheet open={sheet === 'bag'} onOpenChange={(o) => !o && setSheet(null)} />
+      <BirthPlanSheet open={sheet === 'plan'} onOpenChange={(o) => !o && setSheet(null)} />
     </Section>
   );
 }

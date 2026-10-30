@@ -5,7 +5,7 @@ import { ANCHOR, expectTapTargets, start } from './helpers';
 
 const nav = (page: Page) => page.locator('#device').getByRole('navigation', { name: 'Main' });
 
-test('pregnant: the Pregnancy tab holds progress, the baby this week, appointments and so far; Me loses the week ring', async ({ page }) => {
+test('pregnant: the Pregnancy tab holds progress, the baby this week, appointments and so far; Self care has no week ring', async ({ page }) => {
   await start(page, 'D1');
   const d = page.locator('#device');
   await expect(nav(page).getByRole('link', { name: 'Baby' })).toHaveCount(0);
@@ -18,8 +18,8 @@ test('pregnant: the Pregnancy tab holds progress, the baby this week, appointmen
   await expect(d.getByText('Coming up', { exact: true })).toBeVisible();
   await expect(d.getByText('So far', { exact: true })).toBeVisible();
   await expectTapTargets(page);
-  await nav(page).getByRole('link', { name: 'Me' }).click();
-  await expect(d.getByRole('heading', { name: 'Me', exact: true })).toBeVisible();
+  await nav(page).getByRole('link', { name: 'Self care' }).click();
+  await expect(d.getByRole('heading', { name: 'Self care', exact: true })).toBeVisible();
   await expect(d.getByText('22/40')).toHaveCount(0);
 });
 
@@ -57,14 +57,14 @@ async function freshCycleTracker(page: Page) {
   await d.getByRole('button', { name: 'Open Weave' }).click();
 }
 
-test('cycle tracker: Cycle is its own tab, Me has no cycle section, and + offers Period', async ({ page }) => {
+test('cycle tracker: Cycle is its own tab, Self care has no cycle section, and + offers Period', async ({ page }) => {
   await freshCycleTracker(page);
   const d = page.locator('#device');
   await nav(page).getByRole('link', { name: 'Cycle' }).click();
   await expect(page).toHaveURL(/\/cycle$/);
   await expect(d.getByTestId('cycle-summary')).toBeVisible();
   await expect(d.getByRole('button', { name: /Back/ })).toHaveCount(0); // a tab, not a sub-screen
-  await nav(page).getByRole('link', { name: 'Me' }).click();
+  await nav(page).getByRole('link', { name: 'Self care' }).click();
   await expect(d.locator('main').getByText('Cycle', { exact: true })).toHaveCount(0);
   await page.getByTestId('fab').click();
   await d.getByRole('button', { name: /^Period/ }).click();
@@ -104,7 +104,7 @@ test('cycle tracker adds a child in Settings: Baby replaces Cycle and opens on t
   await expect(nav(page).getByRole('link', { name: 'Cycle' })).toHaveCount(0);
 });
 
-test('cycle tracker with no baby: nothing about postpartum or breastfeeding; the Today card opens the Cycle tab', async ({ page }) => {
+test('cycle tracker with no baby: nothing about postpartum or breastfeeding; the period card leads Today', async ({ page }) => {
   await freshCycleTracker(page);
   const d = page.locator('#device');
   const tooEarly = d.getByText('Too early to estimate. Weave estimates your next period once two cycles are logged.');
@@ -114,8 +114,9 @@ test('cycle tracker with no baby: nothing about postpartum or breastfeeding; the
   await expect(d.getByTestId('welcome-card')).toHaveCount(0);
   await expect(tooEarly).toBeVisible();
   await expect(d.getByText(/postpartum/i)).toHaveCount(0);
-  await d.getByRole('button', { name: /^Cycle/ }).click();
+  await nav(page).getByRole('link', { name: 'Cycle' }).click();
   await expect(page).toHaveURL(/\/cycle$/);
+  await d.getByText('About ovulation').click();
   await d.getByText('Why can it shift?').click();
   await expect(d.getByText(/^Stress, illness, travel/)).toBeVisible();
   await expect(d.locator('main').getByText(/postpartum|breastfeed/i)).toHaveCount(0);

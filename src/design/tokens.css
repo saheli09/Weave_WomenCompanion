@@ -82,4 +82,57 @@
   --tap: 44px; /* minimum tap target (PRD 15) */
   --nav-h: 83px;
   --fab-gradient: linear-gradient(96.34deg, var(--color-coral-a) 10%, var(--color-coral-b) 90%);
+
+  /* App background (decision 2026-10-30): a subtle wash, blush at the top to sage at the foot. */
+  --app-top: #fbf1ed;
+  --app-bottom: #f3f6f1;
+  --app-gradient: linear-gradient(180deg, var(--app-top) 0%, var(--color-bg) 42%, var(--app-bottom) 100%);
+}
+
+/*
+ * Dark mode (decision 2026-10-30). Set on the device frame as data-theme="dark"
+ * (Settings, Appearance: System, Light or Dark). Same roles as the light tokens,
+ * warm near-blacks rather than grey, text and accents lifted to pass AA on them.
+ * Buttons that are ink with surface text invert on their own.
+ */
+[data-theme='dark'] {
+  color-scheme: dark;
+  --color-bg: #171312;
+  --color-surface: #221d1b;
+  --color-surface-muted: #2b2522;
+
+  --color-ink: #f3ede9;
+  --color-ink-2: #c7bcb6;
+  --color-ink-3: #ada29c;
+  --color-ink-4: #8f8580;
+  --color-ink-faint: #5f5652;
+
+  --color-line: #37302d;
+  --color-handle: #554b48;
+
+  --color-sage-100: #1d2a23;
+  --color-sage-600: #93c4a6;
+  --color-olive-500: #9db08b;
+  --color-hydration: #7dbaa4;
+
+  --color-coral-icon: #f08c8f;
+  --color-coral-ink: #f4a19c;
+  --color-coral-dot: #d48c8f;
+
+  --color-chip-child-bg: #1c2e44;
+  --color-chip-child-fg: #95c2f4;
+  --color-chip-her-bg: #3d1f29;
+  --color-chip-her-fg: #f394ad;
+
+  --color-terracotta: #d97a4f;
+  --color-terracotta-ink: #f2a581;
+  --color-review-bg: #3a2f12;
+  --color-review-fg: #f3d27a;
+  --color-review-line: #b38a2a;
+
+  --shadow-card: 0 1px 2px #00000040;
+
+  --app-top: #221918;
+  --app-bottom: #141a17;
+  --app-gradient: linear-gradient(180deg, var(--app-top) 0%, var(--color-bg) 42%, var(--app-bottom) 100%);
 }

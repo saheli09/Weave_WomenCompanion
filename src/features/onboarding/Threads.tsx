@@ -70,7 +70,7 @@ export function Splash() {
   }, []);
   if (phase === 'gone') return null;
   return (
-    <div aria-hidden data-testid="splash" className={`absolute inset-0 z-[90] flex flex-col items-center justify-center gap-5 bg-bg ${phase === 'leaving' ? 'splash-out' : ''}`}>
+    <div aria-hidden data-testid="splash" className={`app-bg absolute inset-0 z-[90] flex flex-col items-center justify-center gap-5 ${phase === 'leaving' ? 'splash-out' : ''}`}>
       <WeaveMark size={112} />
       <div className="flex flex-col items-center gap-1">
         <span className="splash-rise font-serif text-[34px] text-ink" style={{ animationDelay: '550ms' }}>

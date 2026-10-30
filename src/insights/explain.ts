@@ -4,6 +4,7 @@ import { formatDayMonth, formatDuration, formatLongDate, formatTime, formulaDays
 import { labourStats, practiceGapsByDay, formatSeconds } from '../domain/labour';
 import type { DomainState, LogEntry } from '../domain/types';
 import { dailyBleeding, pelvicSetsThisWeek, PELVIC_WEEKLY_TARGET } from './rules';
+import { cycleLengths, cyclePhases, cycleTimeline, periodRuns } from '../domain/cycle';
 import { doseSlotsToday, timelineText } from '../state/selectors';
 
 /**
@@ -25,6 +26,7 @@ export const RULE_WORDS: Record<string, CopyEntry> = {
   R15: copy('Shown when Low mood is the last check-in on three days in a row.', 'body'),
   R16: copy('Shown in the last seven days before an open tin’s discard date.', 'body'),
   R17: copy('Shown after an open tin passes its discard date, until you mark it finished or discarded.', 'body'),
+  R18: copy('Shown once a day while you track your cycle, from the cycles you have logged and where today falls in this one.', 'body'),
 };
 
 export interface ExplainRow {
@@ -49,6 +51,15 @@ export function explainData(ruleId: string, state: DomainState, now: Date): Expl
       return rows(today.filter((l) => l.type === 'water' || l.type === 'period'));
     case 'R04':
       return dailyBleeding(state, now, 4).map((lvl, i) => ({ label: i ? formatLongDate(subDays(now, i)) : 'Today', value: lvl ?? 'None logged' }));
+    case 'R18': {
+      const days = state.her.cycle.periodDays ?? [];
+      const phases = cyclePhases(cycleTimeline(days, now), now);
+      return [
+        ...(phases ? [{ label: 'Today', value: `Cycle day ${phases.day} of about ${phases.length}` }] : []),
+        ...periodRuns(days).reverse().slice(0, 4).map((r, i, all) => ({ label: `Period from ${formatDayMonth(r.start)}`, value: i === 0 && all.length ? `${r.length} days logged` : `${r.length} days` })),
+        ...(cycleLengths(days).length ? [{ label: 'Cycle lengths', value: cycleLengths(days).map((n) => `${n} days`).join(', ') }] : []),
+      ];
+    }
     case 'R05':
       return [0, 1, 2, 3].map((i) => {
         const d = subDays(now, i);

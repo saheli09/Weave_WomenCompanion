@@ -83,7 +83,7 @@ export function AskScreen() {
         <div ref={endRef} />
       </div>
       <form
-        className="sticky bottom-0 flex items-center gap-2 bg-bg pt-2"
+        className="sticky bottom-0 flex items-center gap-2 bg-[var(--app-bottom)] pt-2"
         onSubmit={(e) => {
           e.preventDefault();
           ask(text);

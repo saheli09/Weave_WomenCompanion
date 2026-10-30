@@ -15,7 +15,7 @@ import { HeaderPill } from './Chip';
 export function StatusBar({ right }: { right?: ReactNode }) {
   const now = useNow(15_000);
   return (
-    <div className="absolute inset-x-0 top-0 z-30 flex h-11 items-center justify-between bg-bg px-6" aria-hidden={!right}>
+    <div className="absolute inset-x-0 top-0 z-30 flex h-11 items-center justify-between bg-[var(--app-top)] px-6" aria-hidden={!right}>
       <span className="font-sans text-[14px] font-semibold text-ink tabular-nums">{format(now, 'H:mm')}</span>
       <span aria-hidden className="absolute top-0 left-1/2 h-[30px] w-[110px] -translate-x-1/2 rounded-[15px] bg-black" />
       <span className="flex items-center gap-1.5">
@@ -85,9 +85,10 @@ export function BottomNav({ onFab, hidden }: { onFab: () => void; hidden?: boole
   return (
     <nav aria-label="Main" className="absolute inset-x-0 bottom-0 z-20 flex items-center justify-between border-t border-line bg-surface px-4 pt-3 pb-[15px]">
       <Tab to="/today" label={S.navToday.text} icon="navToday" />
-      <Tab to="/me" label={S.navMe.text} icon="navMe" />
-      <FAB onClick={onFab} />
       <Tab {...JOURNEY_TABS[journey]} />
+      <FAB onClick={onFab} />
+      {/* Self care took Me's place (decision 2026-10-30): her body, records and suggestions; her daily logging is on Today. */}
+      <Tab to="/me" label={S.navSelfCare.text} icon="navSelfCare" />
       <Tab to="/ask" label={S.navAsk.text} icon="navAsk" />
     </nav>
   );
@@ -99,6 +100,8 @@ export function BottomNav({ onFab, hidden }: { onFab: () => void; hidden?: boole
  * ------------------------------------------------------------------------- */
 
 export function ScreenHeader({ label, pill, title, subtitle, onSettings }: { label: string; pill?: string; title: string; subtitle?: ReactNode; onSettings?: () => void }) {
+  // A title that only repeats the label ("Me" under "ME") is kept for screen readers but not shown twice.
+  const repeats = label.toLowerCase() === title.toLowerCase() && !subtitle;
   return (
     <header className="flex w-full flex-col gap-5">
       <div className="flex min-h-[22px] items-center justify-between">
@@ -112,7 +115,7 @@ export function ScreenHeader({ label, pill, title, subtitle, onSettings }: { lab
           ) : null}
         </span>
       </div>
-      <div className="flex flex-col gap-[5px]">
+      <div className={repeats ? 'sr-only' : 'flex flex-col gap-[5px]'}>
         <h1 className="type-greeting text-ink">{title}</h1>
         {subtitle ? <p className="font-sans text-[13px] font-medium text-ink-2">{subtitle}</p> : null}
       </div>

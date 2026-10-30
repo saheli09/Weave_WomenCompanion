@@ -20,7 +20,7 @@ test.describe('D3', () => {
     await page.clock.fastForward('42:00');
     const pill = device.getByRole('button', { name: /Srinika sleeping, 0:42/ });
     await expect(pill).toBeVisible();
-    await device.getByRole('link', { name: 'Me' }).click();
+    await device.getByRole('link', { name: 'Self care' }).click();
     await expect(pill).toBeVisible();
     await page.reload();
     await expect(pill).toBeVisible();

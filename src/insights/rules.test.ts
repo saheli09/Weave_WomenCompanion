@@ -1,7 +1,7 @@
 import { addLog, closeFormulaPack, endContraction, startContraction, startLabour } from '../domain/transitions';
 import { buildPersona, ANCHOR } from '../state/personas';
 import { runInsights } from './engine';
-import { R01, R02, R03, R04, R05, R06, R09, R10, R12, R13, R14, R15, R16, R17, RULES } from './rules';
+import { R01, R02, R03, R04, R05, R06, R09, R10, R12, R13, R14, R15, R16, R17, R18, RULES } from './rules';
 import { snoozeInsight } from './engine';
 
 const at = (h: number, m = 0) => { const d = new Date(ANCHOR); d.setHours(h, m, 0, 0); return d; };
@@ -231,5 +231,38 @@ describe('R03: early period days and water', () => {
 });
 
 it('catalogue contains the rules built so far', () => {
-  expect(RULES.map((r) => r.id)).toEqual(['R01', 'R02', 'R03', 'R04', 'R05', 'R06', 'R09', 'R10', 'R12', 'R13', 'R14', 'R15', 'R16', 'R17']);
+  expect(RULES.map((r) => r.id)).toEqual(['R01', 'R03', 'R04', 'R05', 'R06', 'R09', 'R10', 'R12', 'R13', 'R14', 'R15', 'R16', 'R17', 'R18']);
+});
+
+describe('R18: today’s note for a cycle tracker (decision 2026-10-30)', () => {
+  const d7 = buildPersona('D7'); // periods of five days from 25 May, 21 June, 20 July, 16 August; cycles 27 to 29 days
+  const on = (month: number, day: number) => new Date(2026, month, day, 9, 0);
+  const note = (now: Date) => runInsights([R18], { state: d7, now });
+
+  it('fertile window (day 12): how long it runs, from her own cycles, with no action', () => {
+    const [i] = note(ANCHOR);
+    expect(i!.headline).toBe('Fertile window runs to 30 August.');
+    expect(i!.body).toBe('An estimate, not contraception.');
+    expect(i!.actions).toEqual([]);
+  });
+
+  it('after ovulation: the spread of days the next period could come', () => {
+    expect(note(on(8, 5))[0]!.headline).toBe('Next period likely 12 to 14 September.');
+  });
+
+  it('on her period: when it may ease, from how long the last ones lasted', () => {
+    const [i] = note(on(7, 17));
+    expect(i!.headline).toBe('This period may ease around 20 August.');
+    expect(i!.body).toBe('Your last three lasted 5 days each.');
+  });
+
+  it('between period and fertile window: when the window may open', () => {
+    const [i] = note(on(7, 22));
+    expect(i!.headline).toBe('Fertile window may open around 25 August.');
+    expect(i!.body).toBe('An estimate, not contraception.');
+  });
+
+  it('only for someone tracking her cycle, once there are estimates', () => {
+    for (const p of ['D1', 'D3', 'D4', 'D5', 'D6'] as const) expect(R18.evaluate({ state: buildPersona(p), now: ANCHOR }), p).toEqual([]);
+  });
 });

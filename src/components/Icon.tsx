@@ -22,7 +22,7 @@ export const ICONS = {
   pencilSage: '/icons/edit-pencil-sage.png',
   close: '/icons/close.svg',
   navToday: '/icons/nav-today.png',
-  navMe: '/icons/nav-me.svg',
+  navSelfCare: '/icons/nav-selfcare.svg',
   navBaby: '/icons/nav-baby.svg',
   navPregnancy: '/icons/nav-pregnancy.svg',
   navCycle: '/icons/nav-cycle.svg',

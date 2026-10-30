@@ -175,6 +175,20 @@
   transform-origin: left;
   animation: segment-fill 240ms var(--ease-calm);
 }
+/* The same fill for a glass: water rises from the bottom. */
+@keyframes glass-fill {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+.animate-glass-fill {
+  transform-box: fill-box;
+  transform-origin: bottom;
+  animation: glass-fill 280ms var(--ease-calm);
+}
 
 /*
  * Thread motif (onboarding and splash, decision 2026-10-28). Paths use
@@ -215,6 +229,48 @@
 }
 .splash-out {
   animation: splash-out 0.35s ease-in both;
+}
+/* The app's background wash, behind every screen and full-screen overlay. */
+.app-bg {
+  background-color: var(--color-bg);
+  background-image: var(--app-gradient);
+}
+
+/* Water overdue (decision 2026-10-30): the Hydration tile breathes a soft ring a few times, then holds. */
+@keyframes water-nudge {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-hydration) 45%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--color-hydration) 0%, transparent);
+  }
+}
+.water-nudge {
+  animation: water-nudge 2.4s ease-in-out 3;
+}
+
+/* Pregnancy celebration (decision 2026-10-30): confetti in the palette falls once. */
+@keyframes confetti-fall {
+  from {
+    transform: translateY(-40px) rotate(0deg);
+    opacity: 1;
+  }
+  80% {
+    opacity: 1;
+  }
+  to {
+    transform: translateY(900px) rotate(540deg);
+    opacity: 0;
+  }
+}
+.confetti-piece {
+  animation: confetti-fall 2.2s cubic-bezier(0.3, 0.6, 0.5, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .confetti-piece {
+    display: none;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   .thread-draw,

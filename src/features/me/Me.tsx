@@ -4,10 +4,9 @@ import { differenceInMinutes, format, isSameDay, subDays } from 'date-fns';
 import { S } from '../../content/strings';
 import { Copy, t } from '../../components/Copy';
 import { ScreenHeader } from '../../components/Shell';
-import { InsightCarousel } from '../../components/Insight';
 import { ContextCard, ListCard, ListRow, Section } from '../../components/Cards';
-import { MoodChips, ProgressRing, SegmentedProgress } from '../../components/Controls';
-import { PrimaryButton, TextAction } from '../../components/Button';
+import { GlassesProgress, MoodChips, ProgressRing, SegmentedProgress } from '../../components/Controls';
+import { GhostButton, PrimaryButton, TextAction } from '../../components/Button';
 import { DayBars } from '../../components/Charts';
 import { BottomSheet } from '../../components/Sheet';
 import { FilterChip } from '../../components/Chip';
@@ -19,23 +18,27 @@ import { currentPeriodDay, postpartumLabel, STAGE_CONFIG, stageTab } from '../..
 import type { DomainState, LogEntry, MoodValue } from '../../domain/types';
 import { addLog, confirmPeriodReturn, snoozePeriodCard } from '../../domain/transitions';
 import { logPastSleep } from '../../domain/sleep';
+import { deviceName, vitalsOn } from '../../domain/devices';
 import { useDomain, useWeave } from '../../state/store';
 import { now as clockNow, useNow } from '../../state/clock';
-import { cap, latestToday, waterToday } from '../../state/selectors';
+import { cap, latestToday, waterNudge, waterToday } from '../../state/selectors';
 import { atTime, hhmm } from '../../state/time';
 import { dailyBleeding, PELVIC_WEEKLY_TARGET, pelvicSetsThisWeek } from '../../insights/rules';
-import { useInsights } from '../../insights/useInsights';
 import { beginLog, commitLog } from '../../metrics/timeToLog';
 import { useHerLogs } from '../quicklog/useHerLogs';
+import { suggestionsFor } from '../../selfcare/suggestions';
+import { CareLibrary } from '../selfcare/SelfCare';
+import { ReviewFlag } from '../../components/ReviewFlag';
 import { BleedingSheet } from '../quicklog/BabyLogs';
 import { MedicinesToday } from '../today/Today';
 import { useToast } from '../../app/Toast';
 import { useProviderSheet } from '../../app/ProviderSheet';
 
 /**
- * Me tab (S03, 9.2): her recovery, cycle, body, mood, medicines, history.
- * Variants for postpartum, pregnancy (P1) and cycle-only. Details B18 to B23.
- * "Me" everywhere (17.1 #4).
+ * Self care tab (was Me, S03, 9.2; decision 2026-10-30): a few suggestions for
+ * today from her own data, then her body, cycle, medicines and history. Her
+ * daily logging (water, mood) lives on Today. Variants for postpartum,
+ * pregnancy and cycle-only. Details B18 to B23. Routes stay under /me.
  */
 
 const GLASS_ML = 250;
@@ -71,17 +74,10 @@ export function MeScreen() {
   const navigate = useNavigate();
   const apply = useWeave((s) => s.apply);
   const toast = useToast();
-  const { insights, ...handlers } = useInsights();
-  const mine = insights.filter((i) => i.scope !== 'child');
-  const { logWater, logMood } = useHerLogs();
-  const undoLogs = useWeave((s) => s.undo);
-  const waterUndo = useUndo();
   const [periodSheet, setPeriodSheet] = useState(false);
   const her = state.her;
   const week = postpartumLabel(state, now);
   const preg = her.phase === 'pregnancy' && her.pregnancy ? pregnancyWeek(her.pregnancy.dueDate, now) : undefined;
-  const glasses = waterToday(state, now);
-  const mood = latestToday(state, now, 'mood');
   const periodDay = currentPeriodDay(state, now);
   const pain = herLogs(state)
     .filter((l): l is Extract<LogEntry, { type: 'pain' }> => l.type === 'pain' && parseDate(l.at) <= now)
@@ -99,11 +95,14 @@ export function MeScreen() {
   const lastOfType = (type: LogEntry['type']) => herLogs(state).filter((l) => l.type === type && parseDate(l.at) <= now).sort((a, b) => (a.at < b.at ? 1 : -1))[0];
   const symptom = lastOfType('symptom');
   const weight = lastOfType('weight');
+  const lastNight = herLogs(state)
+    .filter((l): l is Extract<LogEntry, { type: 'sleep' }> => l.type === 'sleep' && Boolean(l.end) && isSameDay(parseDate(l.end!), now) && parseDate(l.end!) <= now)
+    .sort((a, b) => (a.at < b.at ? 1 : -1))[0];
+  const vitals = vitalsOn(state, toISODate(now));
 
   return (
     <div className="flex flex-col gap-5" data-screen="me" data-variant={her.phase}>
       <ScreenHeader label={S.meHeader.text} pill={week ? t(S.weekPill, { n: week }) : preg ? t(S.weekPill, { n: preg.week }) : undefined} title={title} onSettings={() => navigate('/settings')} />
-      <InsightCarousel insights={mine} {...handlers} />
 
       {week ? (
         <section aria-label={t(S.weekPostpartum, { n: week })} className="flex flex-col items-center gap-4 rounded-list border border-ink/8 bg-surface p-[25px] shadow-card">
@@ -117,56 +116,10 @@ export function MeScreen() {
         </section>
       ) : null}
 
-      <div className="flex w-full items-stretch gap-3">
-        <section aria-label={S.hydration.text} className="flex min-w-0 flex-1 flex-col justify-between gap-4 rounded-card border border-ink/8 bg-surface p-4 shadow-card">
-          <button type="button" onClick={() => navigate('/me/hydration')} aria-label={t(S.hydrationTileA11y, { count: glasses, goal: her.hydrationGoalGlasses })} className="flex min-h-[44px] items-center gap-2 text-left">
-            <Icon name="hydration" size={14} color="var(--color-ink-2)" />
-            <span className="font-sans text-[10px] font-semibold tracking-[0.5px] text-ink-2 uppercase">{S.hydration.text}</span>
-          </button>
-          <div className="flex items-center justify-between">
-            <p className="font-serif text-ink">
-              <span className="text-[28px]">{glasses}</span>
-              <span className="text-[18px] text-ink-3"> / {her.hydrationGoalGlasses}</span>
-            </p>
-            <button
-              type="button"
-              aria-label={S.addGlassA11y.text}
-              onClick={() => {
-                const id = logWater('me.hydration', { inline: true });
-                waterUndo.offer(id, () => undoLogs([id]));
-              }}
-              className="-mr-3 grid size-11 place-items-center text-ink"
-            >
-              <Plus size={12} />
-            </button>
-          </div>
-          <SegmentedProgress value={glasses} total={her.hydrationGoalGlasses} label={t(S.glassesOfGoal, { count: glasses, goal: her.hydrationGoalGlasses })} />
-          <InlineUndo visible={Boolean(waterUndo.pendingKey)} onUndo={waterUndo.run} />
-        </section>
-        <section aria-label={S.mood.text} className="flex min-w-0 flex-1 flex-col justify-between gap-3 rounded-card border border-ink/8 bg-surface p-4 shadow-card">
-          <button type="button" onClick={() => navigate('/me/mood')} aria-label={t(S.moodTileA11y, { value: mood ? cap(mood.value) : S.add.text })} className="flex min-h-[44px] items-center gap-2 text-left">
-            <Icon name="mood" size={14} color="var(--color-ink-2)" />
-            <span className="font-sans text-[10px] font-semibold tracking-[0.5px] text-ink-2 uppercase">{S.mood.text}</span>
-          </button>
-          <p className="font-serif text-[28px] text-ink">{mood ? cap(mood.value) : '--'}</p>
-          {/* Inline single select (10.1 "Mood chips (Me)"): one tap logs. 2 x 2 so each chip stays 44px. */}
-          <div className="grid grid-cols-2 gap-1">
-            {(['low', 'flat', 'ok', 'good'] as MoodValue[]).map((v) => (
-              <button
-                key={v}
-                type="button"
-                aria-pressed={mood?.value === v}
-                onClick={() => logMood(v, 'me.mood')}
-                className={`min-h-[44px] rounded-chip border font-sans text-[11px] font-medium ${mood?.value === v ? 'border-ink bg-ink text-surface' : 'border-line text-ink'}`}
-              >
-                {cap(v)}
-              </button>
-            ))}
-          </div>
-        </section>
-      </div>
+      <Suggestions />
+      <CareLibrary />
 
-      <Section label={S.body.text}>
+      <Section label={S.selfCareBody.text}>
         <ListCard>
           {her.phase === 'postpartum' ? (
             <>
@@ -181,7 +134,26 @@ export function MeScreen() {
             </>
           ) : null}
           <ListRow size="lg" dot="grey" label={S.pain.text} value={pain ? t(S.bodyPain, { location: pain.location, intensity: pain.intensity }) : S.noneLogged.text} chevron onClick={() => navigate('/me/pain')} />
-          <ListRow size="lg" dot="grey" label={S.meHerSleep.text} chevron onClick={() => navigate('/me/sleep')} />
+          <ListRow
+            size="lg"
+            dot="grey"
+            label={S.meHerSleep.text}
+            sublabel={lastNight?.device ? t(S.fromDevice, { name: deviceName(lastNight.device) }) : undefined}
+            value={lastNight ? t(S.meSleepLastNight, { duration: formatDuration(differenceInMinutes(parseDate(lastNight.end!), parseDate(lastNight.start))) }) : undefined}
+            chevron
+            onClick={() => navigate('/me/sleep')}
+          />
+          {vitals ? (
+            <ListRow
+              size="lg"
+              dot="grey"
+              label={S.meVitals.text}
+              sublabel={t(S.fromDevice, { name: deviceName(vitals.device) })}
+              value={t(S.meVitalsValue, { hr: vitals.restingHr, steps: vitals.steps.toLocaleString() })}
+              chevron
+              onClick={() => navigate('/me/vitals')}
+            />
+          ) : null}
         </ListCard>
       </Section>
 
@@ -224,6 +196,124 @@ export function MeScreen() {
     </div>
   );
 }
+
+/**
+ * Hydration and mood, two tiles side by side: one tap adds a glass (with Undo)
+ * or logs a mood. On Me, and on a cycle tracker's Today (decision 2026-10-29).
+ */
+export function HerTiles({ from }: { from: 'me' | 'today' }) {
+  const state = useDomain();
+  const now = useNow();
+  const navigate = useNavigate();
+  const { logWater, logMood } = useHerLogs();
+  const undoLogs = useWeave((s) => s.undo);
+  const waterUndo = useUndo();
+  const her = state.her;
+  const glasses = waterToday(state, now);
+  const mood = latestToday(state, now, 'mood');
+  // Water overdue: the tile lights up and says since when, instead of an insight card (decision 2026-10-30).
+  const nudge = waterNudge(state, now);
+  const nudgeText = nudge ? (nudge.kind === 'none-yet' ? S.waterNudgeNone.text : t(S.waterNudgeSince, { n: nudge.hours })) : undefined;
+  return (
+    <div className="flex w-full items-stretch gap-3">
+      <section
+        aria-label={S.hydration.text}
+        data-nudge={nudge ? 'water' : undefined}
+        className={`flex min-w-0 flex-1 flex-col justify-between gap-4 rounded-card border p-4 shadow-card ${nudge ? 'water-nudge border-hydration bg-hydration/10' : 'border-ink/8 bg-surface'}`}
+      >
+        <button type="button" onClick={() => navigate('/me/hydration')} aria-label={t(S.hydrationTileA11y, { count: glasses, goal: her.hydrationGoalGlasses })} className="flex min-h-[44px] items-center gap-2 text-left">
+          <Icon name="hydration" size={14} color="var(--color-ink-2)" />
+          <span className="font-sans text-[10px] font-semibold tracking-[0.5px] text-ink-2 uppercase">{S.hydration.text}</span>
+        </button>
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center justify-between">
+            <p className="font-serif text-ink">
+              <span className="text-[28px]">{glasses}</span>
+              <span className="text-[18px] text-ink-3"> / {her.hydrationGoalGlasses}</span>
+            </p>
+            <button
+              type="button"
+              aria-label={nudgeText ? `${S.addGlassA11y.text}. ${nudgeText}` : S.addGlassA11y.text}
+              onClick={() => {
+                const id = logWater(from === 'me' ? 'me.hydration' : 'today.her.water', { inline: true });
+                waterUndo.offer(id, () => undoLogs([id]));
+              }}
+              className={`grid size-11 place-items-center rounded-full ${nudge ? '-mr-1 bg-sage-600 text-surface' : '-mr-3 text-ink'}`}
+            >
+              <Plus size={12} />
+            </button>
+          </div>
+          {nudgeText ? (
+            <p data-testid="water-nudge" className="font-sans text-[12px] font-semibold text-sage-600">
+              {nudgeText}
+            </p>
+          ) : null}
+        </div>
+        <GlassesProgress value={glasses} total={her.hydrationGoalGlasses} label={t(S.glassesOfGoal, { count: glasses, goal: her.hydrationGoalGlasses })} />
+        <InlineUndo visible={Boolean(waterUndo.pendingKey)} onUndo={waterUndo.run} />
+      </section>
+      <section aria-label={S.mood.text} className="flex min-w-0 flex-1 flex-col justify-between gap-3 rounded-card border border-ink/8 bg-surface p-4 shadow-card">
+        <button type="button" onClick={() => navigate('/me/mood')} aria-label={t(S.moodTileA11y, { value: mood ? cap(mood.value) : S.add.text })} className="flex min-h-[44px] items-center gap-2 text-left">
+          <Icon name="mood" size={14} color="var(--color-ink-2)" />
+          <span className="font-sans text-[10px] font-semibold tracking-[0.5px] text-ink-2 uppercase">{S.mood.text}</span>
+        </button>
+        <p className="font-serif text-[28px] text-ink">{mood ? cap(mood.value) : '--'}</p>
+        {/* Inline single select (10.1 "Mood chips (Me)"): one tap logs. 2 x 2 so each chip stays 44px. */}
+        <div className="grid grid-cols-2 gap-1">
+          {(['low', 'flat', 'ok', 'good'] as MoodValue[]).map((v) => (
+            <button
+              key={v}
+              type="button"
+              aria-pressed={mood?.value === v}
+              onClick={() => logMood(v, from === 'me' ? 'me.mood' : 'today.her.mood')}
+              className={`min-h-[44px] rounded-chip border font-sans text-[11px] font-medium ${mood?.value === v ? 'border-ink bg-ink text-surface' : 'border-line text-ink'}`}
+            >
+              {cap(v)}
+            </button>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+/** For you today: up to three suggestions, each with why it is shown and, where it helps, one action. */
+function Suggestions() {
+  const state = useDomain();
+  const now = useNow();
+  const navigate = useNavigate();
+  const { logWater } = useHerLogs();
+  const items = suggestionsFor(state, now);
+  return (
+    <Section label={S.selfCareForYou.text}>
+      <ReviewFlag review={items[0]?.review} className="rounded-card">
+        <ul data-testid="self-care-suggestions" className="flex flex-col gap-3">
+          {items.map((sg, i) => (
+            <li key={sg.id} data-suggestion={sg.id} className={`flex flex-col gap-2 rounded-card p-5 ${TONES[i % TONES.length]}`}>
+              <h3 className="type-insight-sm text-ink">{sg.title}</h3>
+              <p className="type-body text-ink-2">{sg.body}</p>
+              <p className="font-sans text-[12px] text-ink-3">{t(S.selfCareWhy, { reason: sg.why })}</p>
+              {sg.action ? (
+                <GhostButton
+                  className="self-start"
+                  onClick={() => {
+                    if (sg.action!.kind === 'water') logWater('selfcare.water'); // toasts with Undo
+                    else navigate(sg.action!.to);
+                  }}
+                >
+                  {sg.action.label}
+                </GhostButton>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      </ReviewFlag>
+    </Section>
+  );
+}
+
+/** Soft tints from the palette, one per card, so the list reads as separate ideas. */
+const TONES = ['bg-surface', 'bg-olive-500/12', 'bg-chip-her-bg/70'];
 
 /** "Yes, it has" asks one question: the start date (9.8). Period return is only ever set here, by her (6.3). */
 function PeriodStartSheet({ open, onOpenChange, onDone }: { open: boolean; onOpenChange: (o: boolean) => void; onDone: () => void }) {
@@ -512,6 +602,8 @@ export function HerSleepScreen() {
         (herLogs(state).reduce((m, l) => (l.type === 'sleep' && l.end && isSameDay(parseDate(l.end), d) ? m + differenceInMinutes(parseDate(l.end), parseDate(l.start)) : m), 0) / 60) * 10,
       ) / 10,
   }));
+  const navigate = useNavigate();
+  const device = state.devices?.connected;
   const save = () => {
     const end = atTime(to);
     const start = atTime(from);
@@ -526,6 +618,13 @@ export function HerSleepScreen() {
   return (
     <div className="flex flex-col gap-6" data-screen="me-sleep">
       <BackHeader title={S.herSleepTitle.text} />
+      {device ? (
+        <p className="font-sans text-[13px] text-ink-2">{t(S.herSleepFromDevice, { name: deviceName(device) })}</p>
+      ) : (
+        <ListCard>
+          <ListRow size="lg" label={S.herSleepConnect.text} sublabel={S.herSleepConnectHint.text} chevron onClick={() => navigate('/settings')} />
+        </ListCard>
+      )}
       <section className="flex flex-col gap-3 rounded-card bg-surface p-5">
         <div className="grid grid-cols-2 gap-3">
           <Field label={S.sleepFrom.text}>
@@ -542,6 +641,53 @@ export function HerSleepScreen() {
       <Section label={S.last7days.text}>
         <div className="rounded-card bg-surface p-5">
           <DayBars data={data} unit={(v) => `${v}h`} caption={S.herSleepPerDay.text} />
+        </div>
+      </Section>
+    </div>
+  );
+}
+
+/* ------------------------------------------- connected apps: her vitals */
+
+export function VitalsScreen() {
+  const state = useDomain();
+  const now = useNow();
+  const fahrenheit = state.her.units.weight === 'lb';
+  const days = lastDays(now).map((d) => ({ d, v: vitalsOn(state, toISODate(d)) }));
+  const series = (pick: (v: NonNullable<ReturnType<typeof vitalsOn>>) => number) => days.map(({ d, v }) => ({ label: format(d, 'EEEEEE'), full: formatLongDate(d), value: v ? pick(v) : 0 }));
+  const today = days.at(-1)!.v;
+  const temp = (delta: number) => {
+    const n = fahrenheit ? Math.round(delta * 18) / 10 : delta;
+    return `${n > 0 ? '+' : n < 0 ? '−' : ''}${Math.abs(n).toFixed(1)}°${fahrenheit ? 'F' : 'C'}`;
+  };
+  if (!today && !days.some((x) => x.v)) return <Navigate to="/me" replace />;
+  const source = (today ?? days.find((x) => x.v)!.v)!.device;
+  return (
+    <div className="flex flex-col gap-6" data-screen="me-vitals">
+      <BackHeader title={S.vitalsTitle.text} />
+      <p className="font-sans text-[13px] text-ink-2">{t(S.fromDevice, { name: deviceName(source) })}</p>
+      <Section label={S.vitalsHr.text}>
+        <div className="rounded-card bg-surface p-5">
+          <DayBars data={series((v) => v.restingHr)} unit={(v) => `${v} bpm`} caption={S.vitalsHrCaption.text} />
+        </div>
+      </Section>
+      <Section label={S.vitalsTemp.text}>
+        <div className="flex flex-col gap-2 rounded-card bg-surface p-5">
+          {today ? <p className="type-row text-ink">{t(S.vitalsTempLine, { delta: temp(today.skinTempDelta) })}</p> : null}
+          <ol aria-label={S.vitalsTempA11y.text} className="grid grid-cols-7 gap-1 pt-1">
+            {days.map(({ d, v }) => (
+              <li key={toISODate(d)} aria-label={`${formatLongDate(d)}: ${v ? temp(v.skinTempDelta) : S.noneLogged.text}`} className="flex flex-col items-center gap-1 rounded-chip bg-bg py-2">
+                <span aria-hidden className="font-sans text-[11px] text-ink-3">{format(d, 'EEEEEE')}</span>
+                <span aria-hidden className="font-sans text-[12px] font-semibold text-ink">{v ? temp(v.skinTempDelta).replace(/°[CF]$/, '') : '--'}</span>
+              </li>
+            ))}
+          </ol>
+          <Copy as="p" entry={S.vitalsTempNote} className="font-sans text-[12px] text-ink-2" />
+        </div>
+      </Section>
+      <Section label={S.vitalsSteps.text}>
+        <div className="rounded-card bg-surface p-5">
+          <DayBars data={series((v) => v.steps)} unit={(v) => v.toLocaleString()} caption={S.vitalsStepsCaption.text} />
         </div>
       </Section>
     </div>

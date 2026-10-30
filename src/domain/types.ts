@@ -7,6 +7,8 @@
  * renamed or removed.
  */
 
+import type { DeviceId, VitalsDay } from './devices';
+
 export type ISODateTime = string; // full ISO timestamp, e.g. 2026-08-27T10:15:00.000Z
 export type ISODate = string; // calendar date, e.g. 2026-08-27
 
@@ -39,7 +41,23 @@ export interface Pregnancy {
   labour?: { startedAt: ISODateTime; contractions: Contraction[]; endedAt?: ISODateTime };
   birthId?: string;
   /** PRD-ADDITION (9.5 This week checklist). */
-  checklist?: { birthPlanShared: boolean; hospitalBag: 'not_started' | 'packed' };
+  checklist?: {
+    birthPlanShared: boolean;
+    hospitalBag: 'not_started' | 'packed';
+    /** PRD-ADDITION (decision 2026-10-30): which hospital bag items she has packed. Absent: all or none, from hospitalBag. */
+    bagItems?: string[];
+    /** PRD-ADDITION (decision 2026-10-30): her birth plan. Choices are stored as she saw them. */
+    birthPlan?: BirthPlan;
+  };
+}
+
+export interface BirthPlan {
+  place?: string;
+  companion?: string;
+  painRelief?: string[];
+  feeding?: string;
+  afterBirth?: string[];
+  notes?: string;
 }
 
 export interface BirthRecord {
@@ -68,7 +86,8 @@ export type BleedingLevel = 'spotting' | 'light' | 'medium' | 'heavy';
 export type MoodValue = 'low' | 'flat' | 'ok' | 'good';
 export type ReactionSeverity = 'mild' | 'moderate' | 'severe';
 
-export type LogSource = 'quick' | 'timer' | 'sheet' | 'derived';
+/** 'device': brought in from a connected app (Settings, Connected apps). */
+export type LogSource = 'quick' | 'timer' | 'sheet' | 'derived' | 'device';
 
 interface LogBase {
   id: string;
@@ -79,6 +98,8 @@ interface LogBase {
   note?: string;
   /** PRD-ADDITION (9.4 Combo, S07 both sides): entries saved together share a group. */
   groupId?: string;
+  /** PRD-ADDITION (connected apps): which app a 'device' entry came from. */
+  device?: DeviceId;
 }
 
 export type LogPayload =
@@ -235,6 +256,12 @@ export interface DomainState {
     notifications: { doses: boolean; tins: boolean; insights: boolean };
     sharing: { feeds: boolean; appointments: boolean; me: boolean };
   };
+  /** PRD-ADDITION (connected apps, UI only): the one app she has connected. */
+  devices?: { connected: DeviceId; connectedAt: ISODateTime };
+  /** Daily summaries from that app: resting heart rate, skin temperature, steps. */
+  vitals?: VitalsDay[];
+  /** PRD-ADDITION (self care, decision 2026-10-30): days she has marked done in each exercise plan. */
+  selfCare?: { plans: Record<string, number[]> };
   /** PRD-ADDITION (B12): foods she typed that are not in the catalogue, id to name. */
   customFoods?: Record<string, string>;
   /** PRD-ADDITION (B16). Optional so state saved before it existed still loads. */

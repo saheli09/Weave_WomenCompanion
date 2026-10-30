@@ -14,6 +14,7 @@ import { PrimaryButton, SecondaryButton, TextAction } from '../../components/But
 import { BottomSheet } from '../../components/Sheet';
 import { EmptyState } from '../../components/States';
 import { DEFAULT_SETTINGS, updateSettings } from '../../domain/transitions';
+import { connectDevice, DEVICES, deviceName, disconnectDevice, type DeviceId } from '../../domain/devices';
 import { formatDayMonth, formatDuration, formatLongDate, parseDate } from '../../domain/dates';
 import { labourStats } from '../../domain/labour';
 import { deleteEverything, exportEverything, useDomain, useWeave } from '../../state/store';
@@ -55,6 +56,8 @@ export function SettingsScreen() {
   const state = useDomain();
   const apply = useWeave((s) => s.apply);
   const setPanelOpen = useWeave((s) => s.setPanelOpen);
+  const theme = useWeave((s) => s.theme);
+  const setTheme = useWeave((s) => s.setTheme);
   const navigate = useNavigate();
   const toast = useToast();
   const { openSharing } = useSharing();
@@ -64,6 +67,7 @@ export function SettingsScreen() {
   const [partner, setPartner] = useState(state.her.partnerName ?? '');
   const [confirm, setConfirm] = useState(false);
   const [addingChild, setAddingChild] = useState(false);
+  const [device, setDevice] = useState<DeviceId | null>(null);
   const set = (patch: Parameters<typeof updateSettings>[1]) => apply((s) => updateSettings(s, patch));
   // Baby-only settings (feed volumes, formula tins) stay out of the way of someone only tracking her cycle.
   const hasChild = state.children.length > 0;
@@ -89,6 +93,19 @@ export function SettingsScreen() {
 
       {/* Her children come first; with none yet, adding one waits near the end. */}
       {hasChild ? children : null}
+
+      <Section label={S.settingsAppearance.text}>
+        <div className="flex flex-col gap-2">
+          <div role="radiogroup" aria-label={S.settingsAppearance.text} className="flex gap-2">
+            {(['system', 'light', 'dark'] as const).map((th) => (
+              <FilterChip key={th} role="radio" aria-checked={theme === th} selected={theme === th} onClick={() => setTheme(th)}>
+                {th === 'system' ? S.settingsThemeSystem.text : th === 'light' ? S.settingsThemeLight.text : S.settingsThemeDark.text}
+              </FilterChip>
+            ))}
+          </div>
+          <p className="font-sans text-[12px] text-ink-2">{S.settingsThemeHint.text}</p>
+        </div>
+      </Section>
 
       <Section label={S.settingsUnits.text}>
         <div className="flex flex-col gap-3 rounded-card bg-surface p-5">
@@ -145,6 +162,16 @@ export function SettingsScreen() {
         <p className="font-sans text-[12px] text-ink-2">{S.settingsNotificationsMock.text}</p>
       </Section>
 
+      <Section label={S.settingsDevices.text}>
+        <ListCard>
+          {DEVICES.map((d) => (
+            <ListRow key={d.id} size="lg" label={d.name} value={state.devices?.connected === d.id ? S.deviceConnected.text : undefined} chevron onClick={() => setDevice(d.id)} />
+          ))}
+        </ListCard>
+        <p className="font-sans text-[12px] text-ink-2">{S.settingsDevicesHint.text}</p>
+      </Section>
+      <DeviceSheet device={device} onClose={() => setDevice(null)} />
+
       <Section label={S.settingsPeople.text}>
         <div className="flex flex-col gap-4 rounded-card bg-surface p-5">
           <Field label={S.settingsProviderName.text}>
@@ -191,6 +218,54 @@ export function SettingsScreen() {
         </ListCard>
       </Section>
     </div>
+  );
+}
+
+/** Connect or disconnect one app. UI only: connecting fills in sample readings on this phone. */
+function DeviceSheet({ device, onClose }: { device: DeviceId | null; onClose: () => void }) {
+  const current = useDomain().devices?.connected;
+  const apply = useWeave((s) => s.apply);
+  const toast = useToast();
+  const name = device ? deviceName(device) : '';
+  const connected = Boolean(device) && current === device;
+  return (
+    <BottomSheet open={Boolean(device)} onOpenChange={(o) => !o && onClose()} title={fmt(S.deviceConnectTitle, { name })}>
+      <div className="flex flex-col gap-4 pb-2">
+        <h3 className="type-micro text-ink-3">{S.deviceReads.text}</h3>
+        <ListCard className="!px-0">
+          {[S.deviceReadSleep, S.deviceReadHr, S.deviceReadTemp, S.deviceReadSteps].map((r) => (
+            <ListRow key={r.text} label={r.text} />
+          ))}
+        </ListCard>
+        <p className="font-sans text-[13px] text-ink-2">{fmt(S.deviceNoWrite, { name })}</p>
+        {current && !connected ? <p className="font-sans text-[13px] text-ink-2">{fmt(S.deviceOneAtATime, { name, current: deviceName(current) })}</p> : null}
+        {connected ? (
+          <SecondaryButton
+            size="lg"
+            onClick={() => {
+              apply((s) => disconnectDevice(s));
+              toast(fmt(S.toastDeviceDisconnected, { name }));
+              onClose();
+            }}
+          >
+            {S.deviceDisconnect.text}
+          </SecondaryButton>
+        ) : (
+          <PrimaryButton
+            size="lg"
+            tone="ink"
+            onClick={() => {
+              apply((s, at) => connectDevice(s, device!, at));
+              toast(fmt(S.toastDeviceConnected, { name }));
+              onClose();
+            }}
+          >
+            {S.deviceConnect.text}
+          </PrimaryButton>
+        )}
+        <p className="font-sans text-[12px] text-ink-2">{S.deviceMock.text}</p>
+      </div>
+    </BottomSheet>
   );
 }
 

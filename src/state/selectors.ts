@@ -2,6 +2,7 @@ import { differenceInMinutes, isSameDay } from 'date-fns';
 import { formatDuration, formatTime, formatTimeSince, parseDate, toISODate } from '../domain/dates';
 import type { Child, DomainState, LogEntry, Medicine, Subject } from '../domain/types';
 import { S } from '../content/strings';
+import { deviceName } from '../domain/devices';
 
 /** Read-side helpers for screens. Pure: (state, now) -> view data. */
 
@@ -46,6 +47,26 @@ export function sleptToday(state: DomainState, now: Date, subject: Subject): num
 
 export function waterToday(state: DomainState, now: Date): number {
   return logsToday(state, now).reduce((n, l) => (l.type === 'water' && isHer(l.subject) ? n + l.glasses : n), 0);
+}
+
+/** Waking hours for water nudges: nothing before or after these. */
+const WATER_DAY = { from: 8, to: 21 };
+/** No glass by this hour, or none for this many hours, counts as overdue. */
+const WATER_FIRST_BY_H = 10;
+const WATER_GAP_H = 3;
+
+/**
+ * Is a glass of water overdue (decision 2026-10-30)? The Hydration tile lights
+ * up instead of an insight card repeating the count. Quiet outside waking
+ * hours and once the day's goal is met.
+ */
+export function waterNudge(state: DomainState, now: Date): { kind: 'none-yet' } | { kind: 'since'; hours: number } | undefined {
+  const h = now.getHours();
+  if (h < WATER_DAY.from || h >= WATER_DAY.to || waterToday(state, now) >= state.her.hydrationGoalGlasses) return undefined;
+  const last = logsToday(state, now).filter((l) => l.type === 'water' && isHer(l.subject)).sort((a, b) => (a.at < b.at ? 1 : -1))[0];
+  if (!last) return h >= WATER_FIRST_BY_H ? { kind: 'none-yet' } : undefined;
+  const hours = Math.floor(differenceInMinutes(now, parseDate(last.at)) / 60);
+  return hours >= WATER_GAP_H ? { kind: 'since', hours } : undefined;
 }
 
 export function latestToday<T extends LogEntry['type']>(state: DomainState, now: Date, type: T) {
@@ -97,7 +118,7 @@ export function timelineText(l: LogEntry, state: DomainState): string {
     case 'diaper':
       return `Diaper · ${l.kind === 'both' ? 'wet and dirty' : l.kind}`;
     case 'sleep':
-      return l.end ? `Woke · ${formatDuration(differenceInMinutes(parseDate(l.end), parseDate(l.start)))} slept` : 'Fell asleep';
+      return l.end ? `Woke · ${formatDuration(differenceInMinutes(parseDate(l.end), parseDate(l.start)))} slept${l.device ? ` · ${deviceName(l.device)}` : ''}` : 'Fell asleep';
     case 'pump':
       return `Pump · ${l.side} · ${volume(l.ml, state.her.units)}`;
     case 'growth':

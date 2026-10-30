@@ -2,6 +2,7 @@ import { S } from '../content/strings';
 import { READING } from '../content/reading';
 import { MILESTONES } from '../content/milestones';
 import { RECIPES } from '../content/recipes';
+import { BREATHE, CARE_ITEMS } from '../content/selfcare';
 import { copy } from '../content/copy';
 import { HUMAN_CONTACT, lintEntries, lintText } from './copyLint';
 import { RULE_WORDS } from './explain';
@@ -32,6 +33,19 @@ describe('copy lint: every template and string passes 11.4', () => {
 
   it('explainer rule wording', () => {
     const problems = lintEntries(RULE_WORDS);
+    expect(problems, fail(problems)).toEqual([]);
+  });
+
+  it('self-care library', () => {
+    const entries = Object.fromEntries(
+      CARE_ITEMS.flatMap((x) => [
+        [`${x.id}.title`, x.title],
+        [`${x.id}.blurb`, x.blurb],
+        ...(x.kind === 'food' ? [[`${x.id}.why`, x.why]] : []),
+        ...(x.kind === 'plan' ? x.days.flatMap((d, i) => [[`${x.id}.day${i}`, d.title], ...d.steps.map((s, j) => [`${x.id}.day${i}.${j}`, s])]) : x.steps.map((s, j) => [`${x.id}.step${j}`, s])),
+      ]).concat(BREATHE.phases.map((p, i) => [`breathe.${i}`, p])),
+    );
+    const problems = lintEntries(entries);
     expect(problems, fail(problems)).toEqual([]);
   });
 

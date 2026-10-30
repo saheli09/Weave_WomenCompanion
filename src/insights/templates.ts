@@ -158,6 +158,35 @@ export const TEMPLATES = {
     body: copy('Opened {opened}. Due to be discarded by {discardBy}.', 'body'),
     actions: [copy('Discarded', 'action'), copy('Finished', 'action'), copy('Not now', 'action')],
   },
+  // R18, today's note for a cycle tracker (decision 2026-10-30): one per day, from her own cycles, a line or two. No action.
+  R18_period: {
+    ruleId: 'R18',
+    severity: 'info',
+    headline: copy('This period may ease around {date}.', 'headline', clinical('9.8', 'Today’s note for a cycle tracker, kept to a line or two (decision 2026-10-30)')),
+    body: copy('Your last {k} lasted {span}.', 'body'),
+    actions: [],
+  },
+  R18_follicular: {
+    ruleId: 'R18',
+    severity: 'info',
+    headline: copy('Fertile window may open around {date}.', 'headline', clinical('9.8', 'Today’s note for a cycle tracker, kept to a line or two (decision 2026-10-30)')),
+    body: copy('An estimate, not contraception.', 'body'),
+    actions: [],
+  },
+  R18_fertile: {
+    ruleId: 'R18',
+    severity: 'info',
+    headline: copy('Fertile window runs to {date}.', 'headline', clinical('9.8', 'Today’s note for a cycle tracker, kept to a line or two (decision 2026-10-30)')),
+    body: copy('An estimate, not contraception.', 'body'),
+    actions: [],
+  },
+  R18_luteal: {
+    ruleId: 'R18',
+    severity: 'info',
+    headline: copy('Next period likely {early} to {late}.', 'headline', clinical('9.8', 'Today’s note for a cycle tracker, kept to a line or two (decision 2026-10-30)')),
+    body: copy('From your last {k} cycles.', 'body'),
+    actions: [],
+  },
   ESC_reaction: {
     ruleId: 'ESC_reaction',
     severity: 'escalate',

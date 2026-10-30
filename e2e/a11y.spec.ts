@@ -46,7 +46,42 @@ const SCREENS: [persona: string, path: string][] = [
   ['D6', '/today'],
   ['D7', '/today'],
   ['D7', '/cycle'],
+  ['D7', '/me'],
+  ['D7', '/me/vitals'],
+  ['D7', '/settings'],
+  ['D3', '/me/care/plan/pelvic-floor'],
+  ['D5', '/me/care/video/yoga-cramps'],
+  ['D7', '/me/care/food/palak-dal'],
+  ['D7', '/me/care/breathe'],
 ];
+
+/** Dark mode (decision 2026-10-30): the same AA checks on the screens people use most. Lighter set: the tokens are shared. */
+const DARK: [persona: string, path: string][] = [
+  ['D7', '/today'],
+  ['D7', '/cycle'],
+  ['D7', '/me'],
+  ['D3', '/today'],
+  ['D3', '/baby'],
+  ['D1', '/today'],
+  ['D1', '/pregnancy'],
+  ['D5', '/today'],
+  ['D3', '/settings'],
+  ['D7', '/me/care/plan/cycle-move'],
+];
+
+for (const [persona, path] of DARK) {
+  test(`axe, dark: ${persona} ${path}`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await start(page, persona);
+    await page.goto(path);
+    await page.locator('#device main').waitFor();
+    await expect(page.locator('#device')).toHaveAttribute('data-theme', 'dark');
+    await page.waitForTimeout(150);
+    const results = await new AxeBuilder({ page }).include('#device').withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
+    const summary = results.violations.map((v) => `${v.id} (${v.impact}): ${v.help}\n  ${v.nodes.slice(0, 4).map((n) => n.target.join(' ')).join('\n  ')}`);
+    expect(summary, summary.join('\n')).toEqual([]);
+  });
+}
 
 for (const [persona, path] of SCREENS) {
   test(`axe: ${persona} ${path}`, async ({ page }) => {
