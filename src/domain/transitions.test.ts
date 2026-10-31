@@ -23,7 +23,7 @@ import {
   removeAppointment,
   setChecklist,
 } from './transitions';
-import { deriveTodayState, postpartumLabel, currentPeriodDay, stageTab } from './stage';
+import { deriveTodayState, postpartumLabel, pregnantWithChild, currentPeriodDay, stageTab } from './stage';
 
 const now = new Date('2026-08-27T10:30:00');
 const later = (mins: number) => new Date(now.getTime() + mins * 60_000);
@@ -230,11 +230,13 @@ describe('the fourth tab follows her journey (decision 2026-10-28)', () => {
     expect(stageTab(onboard('A', { kind: 'tracking_cycle' }, at), at)).toBe('cycle');
     expect(stageTab(onboard('A', { kind: 'have_baby', child: { name: 'M', dob: '2026-08-01', feeding: ['breast'] } }, at), at)).toBe('baby');
   });
-  it('pregnant with a child: Baby while the child is under two, Pregnancy from two', () => {
+  it('pregnant with a child: Baby keeps the tab at any age; the pregnancy sits in Self care (decision 2026-10-31)', () => {
     const young = onboard('A', { kind: 'pregnant_with_child', dueDate: '2027-02-20', child: { name: 'K', dob: '2025-06-10', feeding: ['solids'] } }, at);
     expect(stageTab(young, at)).toBe('baby');
+    expect(pregnantWithChild(young)).toBe(true);
     const older = onboard('A', { kind: 'pregnant_with_child', dueDate: '2027-02-20', child: { name: 'K', dob: '2024-06-10', feeding: ['solids'] } }, at);
-    expect(stageTab(older, at)).toBe('pregnancy');
+    expect(stageTab(older, at)).toBe('baby');
+    expect(pregnantWithChild(onboard('A', { kind: 'pregnant', dueDate: '2027-01-06' }, at))).toBe(false);
   });
   it('adding a child to a cycle tracker switches the tab to Baby', () => {
     const s = addChild(onboard('A', { kind: 'tracking_cycle' }, at), { name: 'M', dob: '2026-05-01', feeding: ['breast'] }).state;

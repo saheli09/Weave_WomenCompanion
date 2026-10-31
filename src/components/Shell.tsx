@@ -1,10 +1,10 @@
 import type { ReactNode } from 'react';
-import { NavLink } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { S } from '../content/strings';
 import { useNow } from '../state/clock';
 import { useWeave } from '../state/store';
-import { stageTab, type StageTab } from '../domain/stage';
+import { pregnantWithChild, stageTab, type StageTab } from '../domain/stage';
 import { Gear, Icon, type IconName } from './Icon';
 import { HeaderPill } from './Chip';
 
@@ -36,11 +36,12 @@ export function StatusBar({ right }: { right?: ReactNode }) {
 }
 
 /* ---------------------------------------------------------------------------
- * BottomNav + FAB (5.1): Today, Me, [+], her journey, Ask AI. The journey tab
- * is Baby, Pregnancy or Cycle (stageTab, decision 2026-10-28).
+ * BottomNav + FAB (5.1): Today, her journey, [+], Self care, Ask AI. The
+ * journey tab is Baby, Pregnancy or Cycle (stageTab, decision 2026-10-28).
+ * Pregnant with a child, her pregnancy sits in Self care (decision 2026-10-31).
  * ------------------------------------------------------------------------- */
 
-type TabDef = { to: string; label: string; icon: IconName };
+type TabDef = { to: string; label: string; icon: IconName; match?: string[] };
 
 const JOURNEY_TABS: Record<StageTab, TabDef> = {
   baby: { to: '/baby', label: S.navBaby.text, icon: 'navBaby' },
@@ -48,16 +49,17 @@ const JOURNEY_TABS: Record<StageTab, TabDef> = {
   cycle: { to: '/cycle', label: S.navCycle.text, icon: 'navCycle' },
 };
 
-function Tab({ to, label, icon }: TabDef) {
+const under = (pathname: string, paths: string[]) => paths.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+
+function Tab({ to, label, icon, match }: TabDef) {
+  // Active on its own route and below it, and on any `match` route (Pregnancy under Self care, decision 2026-10-31).
+  const { pathname } = useLocation();
+  const isActive = under(pathname, [to, ...(match ?? [])]);
   return (
-    <NavLink to={to} className="flex min-h-[56px] w-16 flex-col items-center justify-center gap-1">
-      {({ isActive }) => (
-        <>
-          <Icon name={icon} size={18} color={isActive ? 'var(--color-coral-icon)' : 'var(--color-ink-2)'} />
-          <span className={`type-nav ${isActive ? 'font-semibold text-coral-ink' : 'text-ink-2'}`}>{label}</span>
-        </>
-      )}
-    </NavLink>
+    <Link to={to} aria-current={isActive ? 'page' : undefined} className="flex min-h-[56px] w-16 flex-col items-center justify-center gap-1">
+      <Icon name={icon} size={18} color={isActive ? 'var(--color-coral-icon)' : 'var(--color-ink-2)'} />
+      <span className={`type-nav ${isActive ? 'font-semibold text-coral-ink' : 'text-ink-2'}`}>{label}</span>
+    </Link>
   );
 }
 
@@ -81,6 +83,7 @@ export function FAB({ onClick }: { onClick: () => void }) {
 export function BottomNav({ onFab, hidden }: { onFab: () => void; hidden?: boolean }) {
   const now = useNow(60_000);
   const journey = useWeave((s) => stageTab(s.domain, now));
+  const withChild = useWeave((s) => pregnantWithChild(s.domain));
   if (hidden) return null;
   return (
     <nav aria-label="Main" className="absolute inset-x-0 bottom-0 z-20 flex items-center justify-between border-t border-line bg-surface px-4 pt-3 pb-[15px]">
@@ -88,8 +91,39 @@ export function BottomNav({ onFab, hidden }: { onFab: () => void; hidden?: boole
       <Tab {...JOURNEY_TABS[journey]} />
       <FAB onClick={onFab} />
       {/* Self care took Me's place (decision 2026-10-30): her body, records and suggestions; her daily logging is on Today. */}
-      <Tab to="/me" label={S.navSelfCare.text} icon="navSelfCare" />
+      {/* Pregnant with a child, the tab opens on Pregnancy, the switch's first view (decision 2026-10-31). */}
+      <Tab to={withChild ? '/pregnancy' : '/me'} label={S.navSelfCare.text} icon="navSelfCare" match={withChild ? ['/me'] : undefined} />
       <Tab to="/ask" label={S.navAsk.text} icon="navAsk" />
+    </nav>
+  );
+}
+
+/**
+ * Pregnancy | Self care at the top of both screens when she is pregnant with
+ * a child (decision 2026-10-31): Baby keeps its tab, and her pregnancy
+ * journey and the baby-this-week info sit with her own care.
+ */
+export function SelfCareSwitch({ current }: { current: 'selfcare' | 'pregnancy' }) {
+  const navigate = useNavigate();
+  const show = useWeave((s) => pregnantWithChild(s.domain));
+  if (!show) return null;
+  const views = [
+    ['pregnancy', '/pregnancy', S.navPregnancy.text],
+    ['selfcare', '/me', S.navSelfCare.text],
+  ] as const;
+  return (
+    <nav aria-label={S.selfCareSwitchA11y.text} data-testid="selfcare-switch" className="grid grid-cols-2 gap-1 rounded-pill bg-surface-muted p-1">
+      {views.map(([view, to, label]) => (
+        <button
+          key={view}
+          type="button"
+          aria-current={view === current ? 'page' : undefined}
+          onClick={() => view !== current && navigate(to)}
+          className={`min-h-[44px] truncate rounded-pill px-3 font-sans text-[14px] font-semibold ${view === current ? 'bg-surface text-ink shadow-card' : 'text-ink-2'}`}
+        >
+          {label}
+        </button>
+      ))}
     </nav>
   );
 }

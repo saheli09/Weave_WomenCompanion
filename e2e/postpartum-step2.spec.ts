@@ -95,6 +95,9 @@ test('combo saves a breast and bottle pair', async ({ page }) => {
   await expect(device.getByRole('radio', { name: 'Right' })).toHaveAttribute('aria-checked', 'true'); // opposite of last side
   await device.getByRole('button', { name: 'Save' }).click();
   await expect(device.getByText(/Feed logged for Srinika: right 10 m and 60 ml/)).toBeVisible();
-  await expect(device.getByText('Feed · right · 10 m')).toBeVisible();
+  // Two feeds more on Today's tile; both entries on All.
+  await expect(device.getByTestId('today-so-far').locator('[data-total="feed"]')).toContainText('Last 10:30am');
+  await device.getByRole('button', { name: /^All \d+ entr/ }).click();
+  await expect(device.getByText('Feed · right · 10 m').first()).toBeVisible();
   await expect(device.getByText('Feed · formula · 60 ml').first()).toBeVisible();
 });

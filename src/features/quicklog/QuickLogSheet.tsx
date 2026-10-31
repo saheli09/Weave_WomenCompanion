@@ -36,8 +36,26 @@ export function quickLogTiles(state: DomainState, now: Date, go: (id: string) =>
   const kid = (type: LogEntry['type']) => (l: LogEntry) => l.subject.kind === 'child' && l.type === type;
   const tile = (id: string, icon: Tile['icon'], label: string, since: string): Tile => ({ id, icon, label, since, onClick: () => go(id) });
 
+  // The child's tiles; pump only if she is breastfeeding (always offered after a birth).
+  const childTiles: Tile[] = [];
+  if (child) {
+    childTiles.push(
+      tile('feed', 'feed', S.tileFeed.text, sinceLast(state, now, kid('feed'))),
+      tile('diaper', 'diaper', S.tileDiaper.text, sinceLast(state, now, kid('diaper'))),
+      tile('sleep', 'sleep', S.tileSleep.text, sinceLast(state, now, kid('sleep'))),
+    );
+    if (state.her.phase !== 'pregnancy' || child.feeding.includes('breast')) childTiles.push(tile('pump', 'pump', S.tilePump.text, sinceLast(state, now, her('pump'))));
+    if (usesFormula(state, child.id)) {
+      const newest = state.formulaPacks.filter((p) => p.childId === child.id && p.status === 'active').sort((a, b) => (a.openedOn < b.openedOn ? 1 : -1))[0];
+      const days = newest ? calendarDaysBetween(newest.openedOn, now) : undefined;
+      childTiles.push(tile('formula', 'missing', S.tileFormulaOpened.text, days === undefined ? S.tileNever.text : days === 0 ? S.tileOpenedToday.text : t(S.tileOpenedAgo, { days })));
+    }
+  }
+
+  // Pregnant with a child (decision 2026-10-31): the child's tiles, then every pregnancy tile.
   if (state.her.phase === 'pregnancy') {
     return [
+      ...childTiles,
       tile('water', 'hydration', S.tileWater.text, sinceLast(state, now, her('water'))),
       tile('mood', 'mood', S.tileMood.text, sinceLast(state, now, her('mood'))),
       tile('symptom', 'missing', S.tileSymptom.text, sinceLast(state, now, her('symptom'))),
@@ -47,20 +65,7 @@ export function quickLogTiles(state: DomainState, now: Date, go: (id: string) =>
     ];
   }
 
-  const tiles: Tile[] = [];
-  if (child) {
-    tiles.push(
-      tile('feed', 'feed', S.tileFeed.text, sinceLast(state, now, kid('feed'))),
-      tile('diaper', 'diaper', S.tileDiaper.text, sinceLast(state, now, kid('diaper'))),
-      tile('sleep', 'sleep', S.tileSleep.text, sinceLast(state, now, kid('sleep'))),
-      tile('pump', 'pump', S.tilePump.text, sinceLast(state, now, her('pump'))),
-    );
-    if (usesFormula(state, child.id)) {
-      const newest = state.formulaPacks.filter((p) => p.childId === child.id && p.status === 'active').sort((a, b) => (a.openedOn < b.openedOn ? 1 : -1))[0];
-      const days = newest ? calendarDaysBetween(newest.openedOn, now) : undefined;
-      tiles.push(tile('formula', 'missing', S.tileFormulaOpened.text, days === undefined ? S.tileNever.text : days === 0 ? S.tileOpenedToday.text : t(S.tileOpenedAgo, { days })));
-    }
-  }
+  const tiles: Tile[] = [...childTiles];
   tiles.push(
     tile('water', 'hydration', S.tileWater.text, sinceLast(state, now, her('water'))),
     tile('mood', 'mood', S.tileMood.text, sinceLast(state, now, her('mood'))),

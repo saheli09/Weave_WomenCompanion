@@ -3,7 +3,7 @@ import { Navigate, useNavigate } from 'react-router-dom';
 import { differenceInMinutes, format, isSameDay, subDays } from 'date-fns';
 import { S } from '../../content/strings';
 import { Copy, t } from '../../components/Copy';
-import { ScreenHeader } from '../../components/Shell';
+import { ScreenHeader, SelfCareSwitch } from '../../components/Shell';
 import { ContextCard, ListCard, ListRow, Section } from '../../components/Cards';
 import { GlassesProgress, MoodChips, ProgressRing, SegmentedProgress } from '../../components/Controls';
 import { GhostButton, PrimaryButton, TextAction } from '../../components/Button';
@@ -104,6 +104,7 @@ export function MeScreen() {
   return (
     <div className="flex flex-col gap-5" data-screen="me" data-variant={her.phase}>
       <ScreenHeader label={S.meHeader.text} pill={week ? t(S.weekPill, { n: week }) : preg ? t(S.weekPill, { n: preg.week }) : undefined} title={title} onSettings={() => navigate('/settings')} />
+      <SelfCareSwitch current="selfcare" />
 
       {week ? (
         <section aria-label={t(S.weekPostpartum, { n: week })} className="flex flex-col items-center gap-4 rounded-list border border-ink/8 bg-surface p-[25px] shadow-card">

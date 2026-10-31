@@ -15,6 +15,7 @@ test('pregnant: the Pregnancy tab holds progress, the baby this week, appointmen
   await expect(d.getByText('Second trimester')).toBeVisible();
   await expect(d.getByTestId('fetal-card')).toContainText('About 28 cm');
   await expect(d.getByTestId('fetal-card')).toContainText('About 430 g');
+  await expect(d.getByTestId('fetal-size')).toHaveText('About the size of a large mango');
   await expect(d.getByText('Coming up', { exact: true })).toBeVisible();
   await expect(d.getByText('So far', { exact: true })).toBeVisible();
   await expectTapTargets(page);
@@ -23,12 +24,72 @@ test('pregnant: the Pregnancy tab holds progress, the baby this week, appointmen
   await expect(d.getByText('22/40')).toHaveCount(0);
 });
 
-test('pregnant with a 14-month-old: the tab stays Baby, and the child strip opens it', async ({ page }) => {
+test('pregnant with a 14-month-old: Baby keeps its tab; Self care opens on Pregnancy, the switch’s first view', async ({ page }) => {
   await start(page, 'D6');
-  await expect(nav(page).getByRole('link', { name: 'Baby' })).toBeVisible();
+  const d = page.locator('#device');
   await expect(nav(page).getByRole('link', { name: 'Pregnancy' })).toHaveCount(0);
-  await page.locator('#device').getByRole('button', { name: /open the Baby screen/ }).click();
+  await nav(page).getByRole('link', { name: 'Baby' }).click();
   await expect(page).toHaveURL(/\/baby$/);
+  await expect(d.getByRole('heading', { name: 'Srinika', exact: true })).toBeVisible();
+  await expect(d.getByTestId('selfcare-switch')).toHaveCount(0);
+
+  await nav(page).getByRole('link', { name: 'Self care' }).click();
+  const sw = d.getByTestId('selfcare-switch');
+  // Pregnancy is the first view, and where the tab opens.
+  await expect(sw.getByRole('button').first()).toHaveText('Pregnancy');
+  await expect(page).toHaveURL(/\/pregnancy$/);
+  await expect(sw.getByRole('button', { name: 'Pregnancy' })).toHaveAttribute('aria-current', 'page');
+  await expect(d.getByRole('heading', { name: 'Week 16', exact: true })).toBeVisible();
+  await expect(d.getByTestId('fetal-size')).toHaveText('About the size of an avocado'); // the baby this week
+  await expect(nav(page).getByRole('link', { name: 'Self care' })).toHaveAttribute('aria-current', 'page');
+  await expectTapTargets(page);
+
+  await sw.getByRole('button', { name: 'Self care' }).click();
+  await expect(page).toHaveURL(/\/me$/);
+  await expect(d.getByRole('heading', { name: 'Self care', exact: true })).toBeVisible();
+  await expect(nav(page).getByRole('link', { name: 'Self care' })).toHaveAttribute('aria-current', 'page');
+  await expectTapTargets(page);
+});
+
+test('pregnant with no child: no switch in Self care; Pregnancy is its own tab', async ({ page }) => {
+  await start(page, 'D1');
+  await nav(page).getByRole('link', { name: 'Self care' }).click();
+  await expect(page.locator('#device').getByTestId('selfcare-switch')).toHaveCount(0);
+  await expect(nav(page).getByRole('link', { name: 'Pregnancy' })).toBeVisible();
+});
+
+test('pregnant with a child: Today has everything from pregnancy and everything about the child', async ({ page }) => {
+  await start(page, 'D6');
+  const d = page.locator('#device');
+  await expect(d.locator('[data-today-state="pregnancy_with_child"]')).toBeVisible();
+  // Pregnancy
+  await expect(d.getByRole('heading', { name: 'Week 16', exact: true })).toBeVisible();
+  await expect(d.getByText('Your medicines today', { exact: true })).toBeVisible();
+  await expect(d.getByText('Coming up', { exact: true })).toBeVisible();
+  await expect(d.getByText('This week', { exact: true })).toBeVisible();
+  await expect(d.getByRole('button', { name: /^Hospital bag/ })).toBeVisible();
+  // The child
+  await expect(d.getByText('Srinika', { exact: true }).first()).toBeVisible();
+  await expect(d.getByText(/Last meal/).first()).toBeVisible();
+  await expect(d.getByText('Today’s meals', { exact: true })).toBeVisible();
+  await expect(d.getByText('Medicine course', { exact: true })).toBeVisible();
+  await expect(d.getByText('Today so far', { exact: true })).toBeVisible();
+  const soFar = d.getByTestId('today-so-far');
+  await expect(soFar.locator('[data-total="meal"]')).toContainText('Meals');
+  await expect(soFar.locator('[data-total="diaper"]')).toBeVisible();
+});
+
+test('pregnant with a child: + offers the child’s logs and every pregnancy log', async ({ page }) => {
+  await start(page, 'D6');
+  const d = page.locator('#device');
+  await d.getByTestId('fab').click();
+  const sheet = d.getByRole('dialog', { name: 'What just happened?' });
+  for (const name of ['Feed', 'Diaper', 'Sleep', 'Water', 'Mood', 'Symptom', 'Medicine', 'Weight', 'Note']) {
+    await expect(sheet.getByRole('button', { name: new RegExp(`^${name}`) })).toBeVisible();
+  }
+  await expect(sheet.getByRole('button', { name: /^Pump/ })).toHaveCount(0); // she is not breastfeeding Srinika
+  await sheet.getByRole('button', { name: /^Diaper/ }).click();
+  await expect(d.getByRole('dialog')).toBeVisible();
 });
 
 test('at birth the Pregnancy tab becomes Baby, with no setup', async ({ page }) => {

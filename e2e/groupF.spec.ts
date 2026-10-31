@@ -44,8 +44,9 @@ test('settings: units change everywhere; Fewer observations; sharing is UI only'
   await page.keyboard.press('Escape');
   await expectTapTargets(page);
   await device.getByRole('link', { name: 'Today' }).click();
-  await expect(device.getByText('Feed · formula · 2oz')).toBeVisible();
   await expect(device.locator('[aria-roledescription="slide"]')).toHaveCount(2);
+  await device.getByRole('button', { name: /^All \d+ entr/ }).click();
+  await expect(device.getByText('Feed · formula · 2oz').first()).toBeVisible();
 });
 
 test('history after a birth lists the archived pregnancy', async ({ page }) => {

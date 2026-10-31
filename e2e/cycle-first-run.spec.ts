@@ -149,12 +149,19 @@ test('I don’t remember: no day count, and the cycle starts when she logs a per
   await expect(d.getByTestId('cycle-summary').getByRole('heading', { name: 'Period, Day 2' })).toBeVisible();
 });
 
-test('mood: one tap logs it, and Today so far appears', async ({ page }) => {
+test('mood: one tap logs it, and Today so far shows a Mood tile with when', async ({ page }) => {
   const d = page.locator('#device');
   const mood = d.getByTestId('mood-card');
   await mood.getByRole('button', { name: 'Ok' }).click();
   await expect(mood.getByRole('button', { name: 'Ok' })).toHaveAttribute('aria-pressed', 'true');
   await expect(d.getByText('Today so far', { exact: true })).toBeVisible();
+  const soFar = d.getByTestId('today-so-far');
+  const tile = soFar.getByRole('group', { name: 'Me' }).locator('[data-total="mood"]');
+  await expect(tile).toContainText('Mood');
+  await expect(tile).toContainText('Ok');
+  await expect(tile).toContainText('Last 10:30am');
+  await d.getByRole('button', { name: /^All 1 entry,/ }).click();
+  await expect(d.getByRole('heading', { name: 'Timeline' })).toBeVisible();
 });
 
 test('symptoms: the row opens the day’s symptoms, saves without marking a period day, and shows what she chose', async ({ page }) => {

@@ -6,21 +6,19 @@ import { milestonesForWeek } from '../../content/milestones';
 import { t, Copy } from '../../components/Copy';
 import { ScreenHeader } from '../../components/Shell';
 import { InsightCarousel } from '../../components/Insight';
-import { SubjectCard, KPIRow, Section, ListCard, ListRow, AddRow, ChecklistRow, ReadingCard, ContextCard, Avatar } from '../../components/Cards';
-import { ActivityTimeline } from '../../components/Timeline';
+import { SubjectCard, KPIRow, Section, ListCard, ListRow, AddRow, ChecklistRow, ReadingCard, ContextCard } from '../../components/Cards';
 import { EmptyState, InlineUndo, useUndo } from '../../components/States';
 import { BleedingSheet, DiaperChooser } from '../quicklog/BabyLogs';
 import { useHerLogs } from '../quicklog/useHerLogs';
 import { useFeedFlow } from '../feeds/FeedSheets';
-import { EditLogSheet } from '../timeline/EditLogSheet';
 import { HerTiles } from '../me/Me';
 import { BirthPlanSheet, bagValue, checklistOf, HospitalBagSheet, planValue } from '../pregnancy/ChecklistSheets';
 import { CycleCard, CycleSetupCard, DaySheet, symptomsOn } from '../cycle/Cycle';
 import { FirstFoodPrompts, MealCard } from '../food/Food';
 import { useSleepFlow } from '../sleep/SleepSheet';
 import { PrimaryButton, GhostButton } from '../../components/Button';
-import { FilterChip } from '../../components/Chip';
-import { Chevron } from '../../components/Icon';
+import { FilterChip, SubjectChip } from '../../components/Chip';
+import { Chevron, Icon, type IconName } from '../../components/Icon';
 import { format } from 'date-fns';
 import { MoodSheet } from '../quicklog/QuickLogSheet';
 import { AppointmentSheet, type AppointmentTarget } from '../pregnancy/AppointmentSheet';
@@ -29,7 +27,7 @@ import { LabourScreen } from '../labour/Labour';
 import { useProviderSheet } from '../../app/ProviderSheet';
 import { useSharing } from '../settings/Settings';
 import { formatChildAge, formatDayMonth, formatDuration, formatLongDate, formatTimeCompact, formatTimeSince, numberWord, capitalise, parseDate, pregnancyWeek, minutesSince, formatTime, toISODate } from '../../domain/dates';
-import { currentPeriodDay, deriveTodayState, primaryChild, STAGE_CONFIG, type TodayState } from '../../domain/stage';
+import { currentPeriodDay, deriveStage, deriveTodayState, primaryChild, STAGE_CONFIG, type TodayState } from '../../domain/stage';
 import type { Child, DomainState, Medicine } from '../../domain/types';
 import { MedicineSheet } from '../medicines/MedicineSheet';
 import { useDoseActions } from '../medicines/useDoseActions';
@@ -41,13 +39,13 @@ import {
   feedCaption,
   greeting,
   lastFeed,
-  lastMeal,
   latestToday,
   sleptToday,
   timelineItems,
   waterNudge,
   waterToday,
   cap,
+  daySoFar,
 } from '../../state/selectors';
 import { useDomain, useWeave } from '../../state/store';
 import { useNow } from '../../state/clock';
@@ -87,7 +85,7 @@ function Compose({ state, now, todayState, insights, onFab }: { state: DomainSta
     case 'pregnancy':
     case 'pregnancy_late':
     case 'pregnancy_with_child':
-      return <PregnancyToday state={state} now={now} date={date} carousel={carousel} withChild={todayState === 'pregnancy_with_child' ? child : undefined} />;
+      return <PregnancyToday state={state} now={now} date={date} carousel={carousel} withChild={todayState === 'pregnancy_with_child' ? child : undefined} onFab={onFab} />;
     case 'labour':
       return <LabourScreen />;
     case 'postpartum_baby':
@@ -419,23 +417,57 @@ function CourseBlock({ state, now }: { state: DomainState; now: Date }) {
   );
 }
 
+/** Icons for the totals that have one; the rest show the number alone. */
+const SO_FAR_ICON: Partial<Record<string, IconName>> = { feed: 'feed', meal: 'solids', diaper: 'diaper', sleep: 'sleep', pump: 'pump', water: 'hydration', mood: 'mood' };
+
+/**
+ * Today so far at a glance (decision 2026-11-01): per person, a tile for
+ * each kind of log with an icon, the count and when the last one was. The
+ * full list, where each entry can be edited, is on All.
+ */
 function TodaySoFar({ state, now, onFab }: { state: DomainState; now: Date; onFab: () => void }) {
   const navigate = useNavigate();
-  const [editing, setEditing] = useState<string | null>(null);
-  const items = timelineItems(state, now).map((i) => ({ ...i, onClick: () => setEditing(i.id), a11y: t(S.editEntryA11y, { what: i.text, time: i.time }) }));
+  const { groups, count } = daySoFar(state, now);
+  const entries = t(S.soFarEntries, { n: count }).split('|')[count === 1 ? 0 : 1]!;
   return (
     <Section
       label={S.todaySoFar.text}
       right={
-        items.length ? (
-          <button type="button" onClick={() => navigate('/timeline')} className="hit-44 type-micro normal-case font-semibold text-ink-3">
+        count ? (
+          <button type="button" onClick={() => navigate('/timeline')} aria-label={t(S.soFarAllA11y, { entries })} className="hit-44 type-micro normal-case font-semibold text-ink-3">
             {S.all.text}
           </button>
         ) : undefined
       }
     >
-      <ActivityTimeline items={items} empty={<EmptyState line={S.nothingLoggedYet.text} action={S.nothingLoggedAction.text} onAction={onFab} />} />
-      <EditLogSheet id={editing} onClose={() => setEditing(null)} />
+      {count ? (
+        <div data-testid="today-so-far" className="flex flex-col gap-4 rounded-card border border-ink/8 bg-surface p-4 shadow-card">
+          {groups.map((g) => (
+            <div key={g.subject.label} role="group" aria-label={g.subject.label} className="flex flex-col gap-2">
+              <span className="flex">
+                <SubjectChip kind={g.subject.kind} label={g.subject.label} />
+              </span>
+              <ul className="grid grid-cols-2 gap-2 min-[380px]:grid-cols-3">
+                {g.totals.map((x) => {
+                  const icon = SO_FAR_ICON[x.key];
+                  return (
+                    <li key={x.key} data-total={x.key} className="flex min-w-0 flex-col gap-1 rounded-list bg-surface-muted px-3 py-2.5">
+                      <span className="flex items-center gap-1.5">
+                        {icon ? <Icon name={icon} size={14} color="var(--color-ink-2)" /> : null}
+                        <span className="min-w-0 font-sans text-[12px] font-medium leading-tight text-ink-2">{x.label}</span>
+                      </span>
+                      <span className="whitespace-nowrap font-serif text-[20px] leading-tight text-ink">{x.value}</span>
+                      <span className="whitespace-nowrap font-sans text-[11px] leading-tight text-ink-2">{x.when}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <EmptyState line={S.nothingLoggedYet.text} action={S.nothingLoggedAction.text} onAction={onFab} />
+      )}
     </Section>
   );
 }
@@ -461,7 +493,12 @@ export function pregnancyHeading(state: DomainState, now: Date) {
   return { week, day, gestationalDays, late, title, subtitle };
 }
 
-function PregnancyToday({ state, now, date, carousel, withChild }: { state: DomainState; now: Date; date: string; carousel: ReactNode; withChild?: Child }) {
+/**
+ * Pregnancy Today. Pregnant with a child (decision 2026-10-31): everything
+ * here, plus everything a child's Today has (the child and her cards, meals,
+ * new-food prompts, a medicine course, Today so far).
+ */
+function PregnancyToday({ state, now, date, carousel, withChild, onFab }: { state: DomainState; now: Date; date: string; carousel: ReactNode; withChild?: Child; onFab: () => void }) {
   const navigate = useNavigate();
   const apply = useWeave((s) => s.apply);
   const { week, late, title, subtitle } = pregnancyHeading(state, now);
@@ -472,9 +509,12 @@ function PregnancyToday({ state, now, date, carousel, withChild }: { state: Doma
     <>
       <ScreenHeader label={date} title={title} subtitle={subtitle} />
       {carousel}
-      {withChild ? <ChildStrip state={state} now={now} child={withChild} /> : null}
-      {/* Water and mood, the same tiles as every cycle tracker's Today (decision 2026-10-30). */}
-      <HerTiles from="today" />
+      {withChild ? (
+        <ChildBlocks state={state} now={now} child={withChild} />
+      ) : (
+        // Water and mood, the same tiles as every cycle tracker's Today (decision 2026-10-30).
+        <HerTiles from="today" />
+      )}
       {late ? (
         <ContextCard
           titleStyle="card"
@@ -506,6 +546,21 @@ function PregnancyToday({ state, now, date, carousel, withChild }: { state: Doma
           <Chevron className="text-ink-4" />
         </button>
       ) : null}
+      {withChild ? <TodaySoFar state={state} now={now} onFab={onFab} /> : null}
+    </>
+  );
+}
+
+/** A child's part of Today, for a pregnant mother: the child and her cards, then meals, new foods and a course as the child's age and logs call for. */
+function ChildBlocks({ state, now, child }: { state: DomainState; now: Date; child: Child }) {
+  const stage = deriveStage(child, now);
+  const solids = stage === 'solids' || stage === 'toddler';
+  return (
+    <>
+      <CardsRow state={state} now={now} child={child} toddler={stage === 'toddler'} />
+      {solids ? <MealCard state={state} now={now} child={child} /> : null}
+      {solids ? <FirstFoodPrompts state={state} now={now} child={child} /> : null}
+      <CourseBlock state={state} now={now} />
     </>
   );
 }
@@ -610,22 +665,6 @@ export function MedicinesToday({ state, now }: { state: DomainState; now: Date }
       </ListCard>
       <MedicineSheet open={sheet.open} editing={sheet.editing} onOpenChange={(open) => setSheet((x) => ({ ...x, open }))} />
     </Section>
-  );
-}
-
-/** Compact child strip for "pregnant again with a child" (B27, P1). */
-function ChildStrip({ state, now, child }: { state: DomainState; now: Date; child: Child }) {
-  const navigate = useNavigate();
-  const meal = lastMeal(state, now, child);
-  return (
-    <button type="button" onClick={() => navigate('/baby')} aria-label={t(S.childStripA11y, { name: child.name })} className="flex min-h-[44px] w-full items-center justify-between rounded-list bg-surface px-4 py-3 text-left">
-      <span className="flex items-center gap-2">
-        <Avatar src={child.photo} name={child.name} />
-        <span className="type-name text-ink">{child.name}</span>
-        <span className="font-sans text-[12px] text-ink-2">{formatChildAge(child.dob, now)}</span>
-      </span>
-      <span className="font-sans text-[12px] text-ink-2">{meal ? t(S.lastMealAt, { time: formatTime(meal.at) }) : S.noMealYet.text}</span>
-    </button>
   );
 }
 

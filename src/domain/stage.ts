@@ -10,8 +10,6 @@ export const STAGE_CONFIG = {
   postpartumLabelMonths: 12,
   labourModeFromWeek: 36,
   cycleCardFromPostpartumWeek: 6,
-  /** Pregnant with a child younger than this: the Baby tab stays, since the child still needs daily logging (decision 2026-10-28). */
-  babyTabWhilePregnantUnderMonths: 24,
 } as const;
 
 export type ChildStage = 'newborn' | 'infant' | 'solids' | 'toddler';
@@ -107,10 +105,17 @@ export function usesFormula(state: DomainState, childId: string): boolean {
  */
 export type StageTab = 'baby' | 'pregnancy' | 'cycle';
 
-export function stageTab(state: DomainState, now: Date): StageTab {
-  const pregnant = state.her.phase === 'pregnancy' && Boolean(state.her.pregnancy);
-  const child = primaryChild(state);
-  if (child && !(pregnant && childAge(child.dob, now).totalMonths >= STAGE_CONFIG.babyTabWhilePregnantUnderMonths)) return 'baby';
-  if (pregnant) return 'pregnancy';
+/**
+ * The journey tab. A child always has Baby, even when she is pregnant again;
+ * her pregnancy then sits in Self care, behind a Self care | Pregnancy switch
+ * (decision 2026-10-31).
+ */
+export function stageTab(state: DomainState, _now: Date): StageTab {
+  if (primaryChild(state)) return 'baby';
+  if (state.her.phase === 'pregnancy' && state.her.pregnancy) return 'pregnancy';
   return 'cycle';
 }
+
+/** Pregnant with a child: both the Baby tab and the pregnancy inside Self care. */
+export const pregnantWithChild = (state: DomainState): boolean =>
+  state.her.phase === 'pregnancy' && Boolean(state.her.pregnancy) && Boolean(primaryChild(state));

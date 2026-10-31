@@ -1,7 +1,7 @@
 import { Navigate, useNavigate } from 'react-router-dom';
 import { S } from '../../content/strings';
 import { t, Copy } from '../../components/Copy';
-import { ScreenHeader } from '../../components/Shell';
+import { SelfCareSwitch, ScreenHeader } from '../../components/Shell';
 import { ListCard, ListRow, Section } from '../../components/Cards';
 import { ProgressRing } from '../../components/Controls';
 import { ReviewFlag } from '../../components/ReviewFlag';
@@ -56,6 +56,7 @@ export function PregnancyTab() {
   return (
     <div className="flex flex-col gap-5" data-screen="pregnancy">
       <ScreenHeader label={S.navPregnancy.text} title={title} subtitle={subtitle} />
+      <SelfCareSwitch current="pregnancy" />
 
       <section aria-label={t(S.pregProgressA11y, { week, tri: numberWord(tri) })} className="flex flex-col items-center gap-4 rounded-list border border-ink/8 bg-surface p-[25px] shadow-card">
         <ProgressRing value={Math.min(1, gestationalDays / 280)} label={t(S.pregnancyWeekCard, { n: week })}>
@@ -75,7 +76,13 @@ export function PregnancyTab() {
       {fetal ? (
         <Section label={S.pregBabyThisWeek.text}>
           <ReviewFlag review={FETAL_REVIEW} className="rounded-card">
-            <article data-testid="fetal-card" className="flex flex-col gap-3 rounded-card bg-surface p-5">
+            <article data-testid="fetal-card" className="flex flex-col gap-4 rounded-card bg-surface p-5">
+              <div className="flex items-center gap-4">
+                <SizeVisual week={fetal.week} emoji={fetal.size.emoji} />
+                <p data-testid="fetal-size" className="font-serif text-[22px] leading-tight text-ink">
+                  {t(S.pregSizeOf, { thing: fetal.size.thing.text })}
+                </p>
+              </div>
               <dl className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1">
                   <dt className="type-micro text-ink-3">{S.pregLength.text}</dt>
@@ -116,5 +123,25 @@ export function PregnancyTab() {
         </button>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * The size comparison as a picture (decision 2026-10-31): the fruit in a soft
+ * circle, drawn larger as the weeks go on, so the growth shows from week to
+ * week. Decorative; the sentence beside it says the same.
+ */
+function SizeVisual({ week, emoji }: { week: number; emoji?: string }) {
+  const grow = Math.min(1, Math.max(0, (week - 4) / 36));
+  return (
+    <span aria-hidden className="grid size-[88px] shrink-0 place-items-center rounded-full bg-chip-her-bg">
+      {emoji ? (
+        <span className="leading-none" style={{ fontSize: `${Math.round(30 + grow * 26)}px` }}>
+          {emoji}
+        </span>
+      ) : (
+        <span className="size-1.5 rounded-full bg-ink" />
+      )}
+    </span>
   );
 }

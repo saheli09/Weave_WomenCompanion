@@ -41,8 +41,11 @@ test('from her sleep screen to a connected Fitbit: nights, vitals and the timeli
   await expect(d.getByText(/^Last night: [+−]?\d\.\d°[CF] from your usual\.$/)).toBeVisible(); // units follow the phone's region
   await expectTapTargets(page);
 
+  // Today's tiles count it; the entry itself is on All.
   await page.goto('/today');
-  await expect(d.getByText(/^Woke · .* slept · Fitbit$/)).toBeVisible();
+  await expect(d.getByTestId('today-so-far').getByRole('group', { name: 'Me' }).locator('[data-total="sleep"]')).toBeVisible();
+  await d.getByRole('button', { name: /^All \d+ entr/ }).click();
+  await expect(d.getByText(/^Woke · .* slept · Fitbit$/).first()).toBeVisible();
 });
 
 test('disconnecting keeps the readings already brought in', async ({ page }) => {
