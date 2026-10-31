@@ -2,6 +2,7 @@ import { differenceInMinutes, isSameDay, subDays } from 'date-fns';
 import { addDaysISO, capitalise, formatDayMonth, formulaDaysLeft, numberWord, parseDate, pregnancyWeek } from '../domain/dates';
 import { labourStats, practiceGapsByDay } from '../domain/labour';
 import { currentPeriodDay, deriveStage } from '../domain/stage';
+import { cycleLengths, cyclePhases, cycleTimeline, periodRuns } from '../domain/cycle';
 import type { LogEntry } from '../domain/types';
 import { doseSlotsToday } from '../state/selectors';
 import type { InsightContext, Rule } from './engine';
@@ -345,4 +346,51 @@ export const R03: Rule = {
   },
 };
 
-export const RULES: Rule[] = [R01, R02, R03, R04, R05, R06, R09, R10, R12, R13, R14, R15, R16, R17];
+/** "27 to 29 days", or "28 days each" when they match. */
+const spanWords = (min: number, max: number) => (min === max ? `${min} days each` : `${min} to ${max} days`);
+
+/**
+ * R18 (her): today's note for someone tracking her cycle (decision 2026-10-30).
+ * Something worth knowing about today, read from her own past cycles, that the
+ * period card does not already say: how long her periods run, how steady her
+ * cycles are, or the spread of days her next period could come. No action.
+ * Only once Weave has estimates, and not after a birth or in pregnancy, where
+ * her day is about other things.
+ */
+export const R18: Rule = {
+  id: 'R18',
+  evaluate: ({ state, now }) => {
+    const her = state.her;
+    if (her.phase !== 'cycle_tracking' || !her.cycle.active || state.children.length) return [];
+    const days = her.cycle.periodDays ?? [];
+    const timeline = cycleTimeline(days, now);
+    const phases = cyclePhases(timeline, now);
+    if (!timeline || !phases) return [];
+    const lengths = cycleLengths(days);
+    const k = numberWord(lengths.length);
+    const base = { id: `R18:${now.toDateString()}`, scope: 'her' as const, priority: 2, at: now.toISOString() };
+    const current = timeline.cycles.find((c) => c.start === phases.start)!;
+    if (phases.today === 'period') {
+      const past = periodRuns(days).slice(0, -1).map((r) => r.length);
+      if (!past.length) return [];
+      const avg = Math.round(past.reduce((a, b) => a + b, 0) / past.length);
+      return [{ ...base, template: 'R18_period', params: { k: numberWord(past.length), span: spanWords(Math.min(...past), Math.max(...past)), date: formatDayMonth(addDaysISO(phases.start, avg - 1)) } }];
+    }
+    const span = spanWords(timeline.shortest, timeline.longest);
+    if (phases.today === 'follicular') return [{ ...base, template: 'R18_follicular', params: { k, span, date: formatDayMonth(current.fertileStart) } }];
+    if (phases.today === 'fertile' || phases.today === 'ovulation') return [{ ...base, template: 'R18_fertile', params: { k, span, date: formatDayMonth(current.fertileEnd) } }];
+    const early = addDaysISO(phases.start, timeline.shortest);
+    const late = addDaysISO(phases.start, timeline.longest);
+    // "12 to 14 September", or "30 September to 2 October" across months.
+    const earlyWords = early.slice(0, 7) === late.slice(0, 7) ? String(Number(early.slice(8))) : formatDayMonth(early);
+    return [{ ...base, template: 'R18_luteal', params: { k, span, early: earlyWords, late: formatDayMonth(late) } }];
+  },
+};
+
+/**
+ * R02 is retired (decision 2026-10-30): it only repeated the water count the
+ * Hydration tile shows. The tile now lights up when water is overdue
+ * (waterNudge, state/selectors), and the cards that join water with other data
+ * (R01 feeds, R03 period) stay.
+ */
+export const RULES: Rule[] = [R01, R03, R04, R05, R06, R09, R10, R12, R13, R14, R15, R16, R17, R18];

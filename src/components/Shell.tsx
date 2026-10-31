@@ -1,8 +1,10 @@
 import type { ReactNode } from 'react';
-import { NavLink } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { S } from '../content/strings';
 import { useNow } from '../state/clock';
+import { useWeave } from '../state/store';
+import { pregnantWithChild, stageTab, type StageTab } from '../domain/stage';
 import { Gear, Icon, type IconName } from './Icon';
 import { HeaderPill } from './Chip';
 
@@ -13,7 +15,7 @@ import { HeaderPill } from './Chip';
 export function StatusBar({ right }: { right?: ReactNode }) {
   const now = useNow(15_000);
   return (
-    <div className="absolute inset-x-0 top-0 z-30 flex h-11 items-center justify-between bg-bg px-6" aria-hidden={!right}>
+    <div className="absolute inset-x-0 top-0 z-30 flex h-11 items-center justify-between bg-[var(--app-top)] px-6" aria-hidden={!right}>
       <span className="font-sans text-[14px] font-semibold text-ink tabular-nums">{format(now, 'H:mm')}</span>
       <span aria-hidden className="absolute top-0 left-1/2 h-[30px] w-[110px] -translate-x-1/2 rounded-[15px] bg-black" />
       <span className="flex items-center gap-1.5">
@@ -34,26 +36,30 @@ export function StatusBar({ right }: { right?: ReactNode }) {
 }
 
 /* ---------------------------------------------------------------------------
- * BottomNav + FAB (5.1): Today, Me, [+], Baby, Ask AI.
+ * BottomNav + FAB (5.1): Today, her journey, [+], Self care, Ask AI. The
+ * journey tab is Baby, Pregnancy or Cycle (stageTab, decision 2026-10-28).
+ * Pregnant with a child, her pregnancy sits in Self care (decision 2026-10-31).
  * ------------------------------------------------------------------------- */
 
-const TABS: { to: string; label: string; icon: IconName }[] = [
-  { to: '/today', label: S.navToday.text, icon: 'navToday' },
-  { to: '/me', label: S.navMe.text, icon: 'navMe' },
-  { to: '/baby', label: S.navBaby.text, icon: 'navBaby' },
-  { to: '/ask', label: S.navAsk.text, icon: 'navAsk' },
-];
+type TabDef = { to: string; label: string; icon: IconName; match?: string[] };
 
-function Tab({ to, label, icon }: (typeof TABS)[number]) {
+const JOURNEY_TABS: Record<StageTab, TabDef> = {
+  baby: { to: '/baby', label: S.navBaby.text, icon: 'navBaby' },
+  pregnancy: { to: '/pregnancy', label: S.navPregnancy.text, icon: 'navPregnancy' },
+  cycle: { to: '/cycle', label: S.navCycle.text, icon: 'navCycle' },
+};
+
+const under = (pathname: string, paths: string[]) => paths.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+
+function Tab({ to, label, icon, match }: TabDef) {
+  // Active on its own route and below it, and on any `match` route (Pregnancy under Self care, decision 2026-10-31).
+  const { pathname } = useLocation();
+  const isActive = under(pathname, [to, ...(match ?? [])]);
   return (
-    <NavLink to={to} className="flex min-h-[56px] w-16 flex-col items-center justify-center gap-1">
-      {({ isActive }) => (
-        <>
-          <Icon name={icon} size={18} color={isActive ? 'var(--color-coral-icon)' : 'var(--color-ink-2)'} />
-          <span className={`type-nav ${isActive ? 'font-semibold text-coral-ink' : 'text-ink-2'}`}>{label}</span>
-        </>
-      )}
-    </NavLink>
+    <Link to={to} aria-current={isActive ? 'page' : undefined} className="flex min-h-[56px] w-16 flex-col items-center justify-center gap-1">
+      <Icon name={icon} size={18} color={isActive ? 'var(--color-coral-icon)' : 'var(--color-ink-2)'} />
+      <span className={`type-nav ${isActive ? 'font-semibold text-coral-ink' : 'text-ink-2'}`}>{label}</span>
+    </Link>
   );
 }
 
@@ -75,15 +81,49 @@ export function FAB({ onClick }: { onClick: () => void }) {
 }
 
 export function BottomNav({ onFab, hidden }: { onFab: () => void; hidden?: boolean }) {
+  const now = useNow(60_000);
+  const journey = useWeave((s) => stageTab(s.domain, now));
+  const withChild = useWeave((s) => pregnantWithChild(s.domain));
   if (hidden) return null;
-  const [a, b, c, d] = TABS as [(typeof TABS)[number], (typeof TABS)[number], (typeof TABS)[number], (typeof TABS)[number]];
   return (
     <nav aria-label="Main" className="absolute inset-x-0 bottom-0 z-20 flex items-center justify-between border-t border-line bg-surface px-4 pt-3 pb-[15px]">
-      <Tab {...a} />
-      <Tab {...b} />
+      <Tab to="/today" label={S.navToday.text} icon="navToday" />
+      <Tab {...JOURNEY_TABS[journey]} />
       <FAB onClick={onFab} />
-      <Tab {...c} />
-      <Tab {...d} />
+      {/* Self care took Me's place (decision 2026-10-30): her body, records and suggestions; her daily logging is on Today. */}
+      {/* Pregnant with a child, the tab opens on Pregnancy, the switch's first view (decision 2026-10-31). */}
+      <Tab to={withChild ? '/pregnancy' : '/me'} label={S.navSelfCare.text} icon="navSelfCare" match={withChild ? ['/me'] : undefined} />
+      <Tab to="/ask" label={S.navAsk.text} icon="navAsk" />
+    </nav>
+  );
+}
+
+/**
+ * Pregnancy | Self care at the top of both screens when she is pregnant with
+ * a child (decision 2026-10-31): Baby keeps its tab, and her pregnancy
+ * journey and the baby-this-week info sit with her own care.
+ */
+export function SelfCareSwitch({ current }: { current: 'selfcare' | 'pregnancy' }) {
+  const navigate = useNavigate();
+  const show = useWeave((s) => pregnantWithChild(s.domain));
+  if (!show) return null;
+  const views = [
+    ['pregnancy', '/pregnancy', S.navPregnancy.text],
+    ['selfcare', '/me', S.navSelfCare.text],
+  ] as const;
+  return (
+    <nav aria-label={S.selfCareSwitchA11y.text} data-testid="selfcare-switch" className="grid grid-cols-2 gap-1 rounded-pill bg-surface-muted p-1">
+      {views.map(([view, to, label]) => (
+        <button
+          key={view}
+          type="button"
+          aria-current={view === current ? 'page' : undefined}
+          onClick={() => view !== current && navigate(to)}
+          className={`min-h-[44px] truncate rounded-pill px-3 font-sans text-[14px] font-semibold ${view === current ? 'bg-surface text-ink shadow-card' : 'text-ink-2'}`}
+        >
+          {label}
+        </button>
+      ))}
     </nav>
   );
 }
@@ -94,6 +134,8 @@ export function BottomNav({ onFab, hidden }: { onFab: () => void; hidden?: boole
  * ------------------------------------------------------------------------- */
 
 export function ScreenHeader({ label, pill, title, subtitle, onSettings }: { label: string; pill?: string; title: string; subtitle?: ReactNode; onSettings?: () => void }) {
+  // A title that only repeats the label ("Me" under "ME") is kept for screen readers but not shown twice.
+  const repeats = label.toLowerCase() === title.toLowerCase() && !subtitle;
   return (
     <header className="flex w-full flex-col gap-5">
       <div className="flex min-h-[22px] items-center justify-between">
@@ -107,7 +149,7 @@ export function ScreenHeader({ label, pill, title, subtitle, onSettings }: { lab
           ) : null}
         </span>
       </div>
-      <div className="flex flex-col gap-[5px]">
+      <div className={repeats ? 'sr-only' : 'flex flex-col gap-[5px]'}>
         <h1 className="type-greeting text-ink">{title}</h1>
         {subtitle ? <p className="font-sans text-[13px] font-medium text-ink-2">{subtitle}</p> : null}
       </div>

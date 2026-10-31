@@ -14,20 +14,41 @@ import { ExplainProvider } from '../insights/ExplainProvider';
 import { AskScreen } from '../features/ask/Ask';
 import { HistoryScreen, SettingsScreen, SharingProvider } from '../features/settings/Settings';
 import { Onboarding } from '../features/onboarding/Onboarding';
+import { Splash } from '../features/onboarding/Threads';
 import { FeedFlowProvider } from '../features/feeds/FeedSheets';
 import { SleepFlowProvider } from '../features/sleep/SleepSheet';
 import { ActivePills } from '../features/timers/ActivePills';
 import { BirthDetails, Handoff } from '../features/birth/BirthDetails';
 import { SomethingChanged } from '../features/pregnancy/SomethingChanged';
+import { PregnancyTab } from '../features/pregnancy/PregnancyTab';
 import { TimelineScreen } from '../features/timeline/Timeline';
 import { FormulaFlowProvider, FormulaStock } from '../features/formula/Formula';
 import { BabyTab, CoursesScreen, GrowthScreen, ModuleHistory, VaccinesScreen } from '../features/baby/Baby';
 import { CycleScreen } from '../features/cycle/Cycle';
 import { FoodDetail, FoodJourney, ReactionFlow, RecipeScreen, SolidsFlowProvider } from '../features/food/Food';
-import { BleedingScreen, HerMedicinesScreen, HerSleepScreen, HydrationScreen, MeScreen, MoodScreen, PainScreen, PelvicScreen } from '../features/me/Me';
+import { BleedingScreen, HerMedicinesScreen, HerSleepScreen, HydrationScreen, MeScreen, MoodScreen, PainScreen, PelvicScreen, VitalsScreen } from '../features/me/Me';
 import { beginLog, setMetricsPersonaProvider } from '../metrics/timeToLog';
+import { syncDevices } from '../domain/devices';
+import { BreatheScreen, CareItemScreen } from '../features/selfcare/SelfCare';
+import { useNow } from '../state/clock';
+import { useResolvedTheme } from './theme';
 
 setMetricsPersonaProvider(() => useWeave.getState().personaId);
+
+/** A connected app keeps bringing readings in as the (demo) clock moves: last night once she wakes, today's steps hourly. */
+function DeviceSync() {
+  const now = useNow();
+  const connected = useWeave((s) => s.domain.devices?.connected);
+  const hour = `${now.toDateString()} ${now.getHours()}`;
+  useEffect(() => {
+    if (!connected) return;
+    const { domain } = useWeave.getState();
+    const next = syncDevices(domain, now);
+    if (next !== domain) useWeave.setState({ domain: next });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connected, hour]);
+  return null;
+}
 
 /** Device frame (402 x 874, the Figma frame) with the demo panel beside it on desktop (PRD 15). */
 function DeviceLayout() {
@@ -36,13 +57,17 @@ function DeviceLayout() {
   const setPanelOpen = useWeave((s) => s.setPanelOpen);
   const location = useLocation();
   const labourOpen = useWeave((s) => Boolean(s.domain.her.pregnancy?.labour && !s.domain.her.pregnancy.labour.endedAt));
+  // A fresh install opens on onboarding (9.13) until she finishes it or loads sample data.
+  const needsOnboarding = useWeave((s) => !s.onboarded) && location.pathname !== '/onboarding';
+  const theme = useResolvedTheme();
   useEffect(() => setFab(false), [location.pathname]);
 
   return (
     <div className="flex min-h-dvh items-start justify-center gap-10 bg-[#e9e5df] sm:py-10">
       <div
         id="device"
-        className="relative h-dvh w-full overflow-hidden bg-bg sm:h-[var(--device-h)] sm:w-[var(--device-w)] sm:rounded-[44px] sm:shadow-[0_30px_80px_-20px_rgba(44,37,35,0.35)] sm:ring-8 sm:ring-[#1d1a19]"
+        data-theme={theme}
+        className="app-bg relative h-dvh w-full overflow-hidden text-ink sm:h-[var(--device-h)] sm:w-[var(--device-w)] sm:rounded-[44px] sm:shadow-[0_30px_80px_-20px_rgba(44,37,35,0.35)] sm:ring-8 sm:ring-[#1d1a19]"
       >
         <DevNoticeProvider>
           <ToastProvider>
@@ -53,6 +78,7 @@ function DeviceLayout() {
           <SolidsFlowProvider>
           <FeedFlowProvider>
           <SleepFlowProvider>
+          <DeviceSync />
           <StatusBar
             right={
               <button type="button" onClick={() => setPanelOpen(!panelOpen)} className="rounded-pill border border-dashed border-review-line bg-review-bg px-2.5 py-1 font-sans text-[11px] font-semibold text-review-fg lg:hidden" aria-label="Demo controls">
@@ -62,6 +88,7 @@ function DeviceLayout() {
           />
           <main className={`absolute inset-0 flex flex-col overflow-y-auto overflow-x-hidden px-5 pt-[var(--screen-top)] [scrollbar-width:none] ${labourOpen || location.pathname === '/welcome' || location.pathname === '/onboarding' ? 'pb-8' : 'pb-[calc(var(--nav-h)+32px)]'}`}>
             <ErrorBoundary>
+              {needsOnboarding ? <Navigate to="/onboarding" replace /> : null}
               <Routes>
                 <Route path="/today" element={<Today onFab={() => { beginLog('today.empty'); setFab(true); }} />} />
                 <Route path="/me" element={<MeScreen />} />
@@ -71,8 +98,13 @@ function DeviceLayout() {
                 <Route path="/me/pelvic" element={<PelvicScreen />} />
                 <Route path="/me/pain" element={<PainScreen />} />
                 <Route path="/me/sleep" element={<HerSleepScreen />} />
+                <Route path="/me/vitals" element={<VitalsScreen />} />
+                <Route path="/me/care/breathe" element={<BreatheScreen />} />
+                <Route path="/me/care/:kind/:id" element={<CareItemScreen />} />
                 <Route path="/me/medicines" element={<HerMedicinesScreen />} />
                 <Route path="/me/cycle" element={<CycleScreen />} />
+                <Route path="/cycle" element={<CycleScreen asTab />} />
+                <Route path="/pregnancy" element={<PregnancyTab />} />
                 <Route path="/baby" element={<BabyTab />} />
                 <Route path="/baby/feeding" element={<ModuleHistory kind="feeding" />} />
                 <Route path="/baby/meals" element={<ModuleHistory kind="meals" />} />
@@ -100,6 +132,7 @@ function DeviceLayout() {
           </main>
           {/* Labour mode strips Weave back to the timer (9.6): no nav, no FAB. */}
           <BottomNav hidden={labourOpen || location.pathname === '/welcome' || location.pathname === '/onboarding'} onFab={() => { beginLog('fab'); setFab(true); }} />
+          <Splash />
           <div id="sheet-root" className="pointer-events-none absolute inset-0 z-40 [&>*]:pointer-events-auto" />
           <QuickLogSheet open={fab} onOpenChange={setFab} />
           {panelOpen ? (

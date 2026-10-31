@@ -79,10 +79,12 @@ test('R09 appears after the evening dose time and clears when the dose is logged
   await expect(device.getByText('Evening dose of Ferrogen XT not logged yet.')).toBeVisible();
 });
 
-test('mood from the Today row takes two taps (decision 2026-10-05)', async ({ page }) => {
+test('water and mood on Today, one tap each (decision 2026-10-30)', async ({ page }) => {
   const device = page.locator('#device');
-  await device.getByRole('button', { name: /^Mood today: Ok/ }).click();
-  await device.getByRole('radio', { name: 'Low' }).click();
-  await expect(device.getByRole('button', { name: /^Mood today: Low/ })).toBeVisible();
-  expect((await timings(page)).at(-1)).toMatchObject({ action: 'mood', taps: 2, outcome: 'saved' });
+  const mood = device.getByRole('region', { name: 'Mood' });
+  await mood.getByRole('button', { name: 'Low', exact: true }).click();
+  await expect(mood.getByRole('button', { name: 'Low', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  expect((await timings(page)).at(-1)).toMatchObject({ action: 'mood', taps: 1, outcome: 'saved' });
+  await device.getByRole('region', { name: 'Hydration' }).getByRole('button', { name: 'Add a glass' }).click();
+  expect((await timings(page)).at(-1)).toMatchObject({ action: 'water', taps: 1, outcome: 'saved' });
 });

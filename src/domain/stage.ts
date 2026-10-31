@@ -94,3 +94,28 @@ export function usesFormula(state: DomainState, childId: string): boolean {
     )
   );
 }
+
+/**
+ * The fourth tab follows her main journey (decision 2026-10-28). Me is how she
+ * is today; this tab is the journey over weeks and months.
+ * - Any child, unless she is pregnant and the youngest is two or older: Baby.
+ * - Pregnant: Pregnancy.
+ * - Otherwise (cycle tracking): Cycle.
+ * Adding a child or saving a birth switches it to Baby; nothing is set by hand.
+ */
+export type StageTab = 'baby' | 'pregnancy' | 'cycle';
+
+/**
+ * The journey tab. A child always has Baby, even when she is pregnant again;
+ * her pregnancy then sits in Self care, behind a Self care | Pregnancy switch
+ * (decision 2026-10-31).
+ */
+export function stageTab(state: DomainState, _now: Date): StageTab {
+  if (primaryChild(state)) return 'baby';
+  if (state.her.phase === 'pregnancy' && state.her.pregnancy) return 'pregnancy';
+  return 'cycle';
+}
+
+/** Pregnant with a child: both the Baby tab and the pregnancy inside Self care. */
+export const pregnantWithChild = (state: DomainState): boolean =>
+  state.her.phase === 'pregnancy' && Boolean(state.her.pregnancy) && Boolean(primaryChild(state));

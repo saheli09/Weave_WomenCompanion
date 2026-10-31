@@ -25,6 +25,41 @@ export function logPeriodDay(state: DomainState, date: ISODate, flow: BleedingLe
   return { ...withLog, her: { ...withLog.her, cycle: { ...withLog.her.cycle, periodDays, lastPeriodStart } } };
 }
 
+/** A last period that began this many days ago or fewer may still be going; an older one has finished. */
+export const ONGOING_MAX_DAYS = 7;
+
+/**
+ * First-run Today (decision 2026-10-31): her last period started on this day.
+ * Turns tracking on. A start more than a week ago is recorded as finished, as
+ * in onboarding, so Today does not read "Period, day 12".
+ */
+export function startCycleFrom(state: DomainState, date: ISODate, now: Date): DomainState {
+  const on = { ...state, her: { ...state.her, cycle: { ...state.her.cycle, active: true, startUnknown: undefined } } };
+  const s = logPeriodDay(on, date, 'medium', [], now);
+  if (calendarDaysBetween(date, now) + 1 <= ONGOING_MAX_DAYS) return s;
+  return addLog(s, { kind: 'her' }, { type: 'period', flow: 'light', event: 'end' }, new Date(`${date}T12:00:00`), 'derived').state;
+}
+
+/** First-run Today: she does not remember when her last period started. */
+export function cycleStartUnknown(state: DomainState): DomainState {
+  return { ...state, her: { ...state.her, cycle: { ...state.her.cycle, active: true, startUnknown: true } } };
+}
+
+/**
+ * Symptoms for one day from the cycle day detail. On a period day they sit on
+ * that day's period log; otherwise each is its own symptom log. Chips she
+ * cleared are removed; symptoms logged elsewhere (other names) stay.
+ */
+export function setDaySymptoms(state: DomainState, date: ISODate, names: string[], offered: string[], now: Date): DomainState {
+  const period = state.logs.find((l) => l.type === 'period' && l.event !== 'end' && l.subject.kind === 'her' && toISODate(new Date(l.at)) === date);
+  if (period && period.type === 'period') return logPeriodDay(state, date, period.flow, names, now);
+  const onDay = (l: DomainState['logs'][number]) => l.type === 'symptom' && l.subject.kind === 'her' && toISODate(new Date(l.at)) === date;
+  const kept = state.logs.filter((l) => !(onDay(l) && l.type === 'symptom' && offered.includes(l.name) && !names.includes(l.name)));
+  const have = new Set(kept.filter(onDay).map((l) => (l.type === 'symptom' ? l.name : '')));
+  const at = date === toISODate(now) ? now : new Date(`${date}T09:00:00`);
+  return names.filter((n) => !have.has(n)).reduce((s, name) => addLog(s, { kind: 'her' }, { type: 'symptom', name }, at, 'sheet').state, { ...state, logs: kept });
+}
+
 /** Remove a logged period day. */
 export function removePeriodDay(state: DomainState, date: ISODate): DomainState {
   const periodDays = (state.her.cycle.periodDays ?? []).filter((d) => d !== date);
@@ -157,8 +192,101 @@ export function cycleDay(timeline: CycleTimeline | undefined, days: ISODate[], i
   return { period: logged ? 'logged' : predicted ? 'predicted' : undefined, fertile: Boolean(c) && !logged, ovulation: c?.ovulation === iso && !logged };
 }
 
+/** A typical cycle, for the rough first estimate before two cycles are logged; she can change it within these bounds. */
+export const TYPICAL_CYCLE_DAYS = 28;
+export const USUAL_LENGTH_MIN = 21;
+export const USUAL_LENGTH_MAX = 45;
+
+/**
+ * Rough next period from one logged start and her usual cycle length (28 unless
+ * she changed it; decision 2026-10-31), only while there is no real estimate
+ * and only if it is still ahead. The calendar does not draw it.
+ */
+export function roughNextPeriod(days: ISODate[], now: Date, length = TYPICAL_CYCLE_DAYS): ISODate | undefined {
+  if (nextPeriodEstimate(days)) return undefined;
+  const start = periodStarts(days).at(-1);
+  if (!start) return undefined;
+  const next = addDaysISO(start, length);
+  return next >= toISODate(now) ? next : undefined;
+}
+
+export interface NextPeriod {
+  date: ISODate;
+  /** Whole days from today; 0 is today. */
+  days: number;
+  /** 'history': from her logged cycles. 'usual': rough, from her usual length. */
+  basis: 'history' | 'usual';
+  /** Completed cycles behind a history estimate. */
+  cycles: number;
+  /** Cycle length behind a rough estimate. */
+  length: number;
+}
+
+/** The next period for the status card: from her cycles once two are logged, else (if allowed) rough from her usual length. */
+export function nextPeriod(state: DomainState, now: Date, allowRough = true): NextPeriod | undefined {
+  const days = state.her.cycle.periodDays ?? [];
+  const length = state.her.cycle.usualLength ?? TYPICAL_CYCLE_DAYS;
+  const real = nextPeriodEstimate(days);
+  const date = real ?? (allowRough ? roughNextPeriod(days, now, length) : undefined);
+  if (!date) return undefined;
+  return { date, days: calendarDaysBetween(toISODate(now), date), basis: real ? 'history' : 'usual', cycles: cycleLengths(days).length, length };
+}
+
+/** Her usual cycle length, kept within 21 to 45 days. */
+export function setUsualCycleLength(state: DomainState, length: number): DomainState {
+  const usualLength = Math.min(USUAL_LENGTH_MAX, Math.max(USUAL_LENGTH_MIN, Math.round(length)));
+  return { ...state, her: { ...state.her, cycle: { ...state.her.cycle, usualLength } } };
+}
+
 /** Day of the current cycle (1 = first period day), once tracking has a start. */
 export function cycleDayNumber(days: ISODate[], now: Date): number | undefined {
   const start = periodStarts(days).at(-1);
   return start ? calendarDaysBetween(start, now) + 1 : undefined;
+}
+
+/* ---------------------------------------------------------------------------
+ * Cycle phases (decision 2026-10-28): the cycle that holds today, split into
+ * period, follicular, fertile window, ovulation and luteal, from the same
+ * estimates as the calendar. Education, not a fertility score (PRD 2.2).
+ * ------------------------------------------------------------------------- */
+
+export type PhaseKey = 'period' | 'follicular' | 'fertile' | 'ovulation' | 'luteal';
+
+export interface CyclePhase {
+  key: PhaseKey;
+  start: ISODate;
+  end: ISODate;
+  days: number;
+}
+
+export interface CyclePhases {
+  start: ISODate;
+  length: number;
+  /** 1-based day of this cycle. */
+  day: number;
+  today: PhaseKey;
+  phases: CyclePhase[];
+}
+
+export function cyclePhases(timeline: CycleTimeline | undefined, now: Date): CyclePhases | undefined {
+  if (!timeline) return undefined;
+  const today = toISODate(now);
+  const c = timeline.cycles.find((x) => x.start <= today && today < addDaysISO(x.start, x.length));
+  if (!c) return undefined;
+  const last = addDaysISO(c.start, c.length - 1);
+  // An ongoing period counts at least the usual length, so the follicular phase does not start early.
+  const periodDays = Math.min(Math.max(c.periodDays.length, c.kind === 'current' ? timeline.averagePeriod : 0, 1), c.length);
+  const periodEnd = addDaysISO(c.start, periodDays - 1);
+  const raw: [PhaseKey, ISODate, ISODate][] = [
+    ['period', c.start, periodEnd],
+    ['follicular', addDaysISO(periodEnd, 1), addDaysISO(c.fertileStart, -1)],
+    ['fertile', c.fertileStart > periodEnd ? c.fertileStart : addDaysISO(periodEnd, 1), addDaysISO(c.ovulation, -1)],
+    ['ovulation', c.ovulation, c.ovulation],
+    ['luteal', addDaysISO(c.ovulation, 1), last],
+  ];
+  const phases = raw
+    .filter(([, s, e]) => s <= e && s <= last)
+    .map(([key, s, e]) => ({ key, start: s, end: e > last ? last : e, days: calendarDaysBetween(s, e > last ? last : e) + 1 }));
+  const now_ = phases.find((p) => p.start <= today && today <= p.end) ?? phases.at(-1)!;
+  return { start: c.start, length: c.length, day: calendarDaysBetween(c.start, today) + 1, today: now_.key, phases };
 }

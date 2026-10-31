@@ -15,8 +15,12 @@ import { ANCHOR, buildPersona, type PersonaId } from './personas';
 export interface WeaveStore {
   domain: DomainState;
   personaId: PersonaId | null;
+  /** False on a fresh install: the app opens on onboarding until she finishes it or loads sample data. */
+  onboarded: boolean;
   clockOffsetMs: number;
   demo: { reviewMarkers: boolean; panelOpen: boolean };
+  /** Appearance (decision 2026-10-30): follow the phone, or always light or dark. A viewer preference, not her data. */
+  theme: ThemePref;
 
   /** Run a pure transition against current state and the demo clock. */
   apply: (fn: (s: DomainState, at: Date) => DomainState) => void;
@@ -29,13 +33,16 @@ export interface WeaveStore {
   advance: (ms: number) => void;
   setReviewMarkers: (on: boolean) => void;
   setPanelOpen: (open: boolean) => void;
+  setTheme: (theme: ThemePref) => void;
 }
+
+export type ThemePref = 'system' | 'light' | 'dark';
 
 export const STORAGE_KEY = 'weave-v1';
 
 /** Seeded relative to the demo clock, so a persona always looks like it is being used right now. */
 function personaState(id: PersonaId, at: Date = now()) {
-  return { domain: buildPersona(id, at), personaId: id };
+  return { domain: buildPersona(id, at), personaId: id, onboarded: true };
 }
 
 /**
@@ -49,8 +56,10 @@ export const useWeave = create<WeaveStore>()(
   persist(
     (set, get) => ({
       ...personaState('D3', ANCHOR),
+      onboarded: false,
       clockOffsetMs: ANCHOR.getTime() - Date.now(),
       demo: { reviewMarkers: true, panelOpen: false },
+      theme: 'system',
 
       apply: (fn) => set({ domain: fn(get().domain, now()) }),
       log: (subject, payload, source = 'quick', extra) => {
@@ -74,18 +83,21 @@ export const useWeave = create<WeaveStore>()(
       },
       setReviewMarkers: (on) => set({ demo: { ...get().demo, reviewMarkers: on } }),
       setPanelOpen: (open) => set({ demo: { ...get().demo, panelOpen: open } }),
+      setTheme: (theme) => set({ theme }),
     }),
     {
       name: STORAGE_KEY,
-      version: 2,
+      version: 3,
       // v2 added vaccinations; earlier saves load with an empty list.
+      // v3 added onboarded; anyone with an earlier save was already using the app.
       migrate: (persisted, from) => {
-        const p = persisted as { domain?: DomainState };
+        const p = persisted as { domain?: DomainState; onboarded?: boolean };
         if (from < 2 && p.domain) p.domain = { ...p.domain, vaccinations: p.domain.vaccinations ?? [] };
+        if (from < 3) p.onboarded = true;
         return p as never;
       },
       storage: createJSONStorage(() => localStorage),
-      partialize: (s) => ({ domain: s.domain, personaId: s.personaId, clockOffsetMs: s.clockOffsetMs, savedAt: Date.now(), demo: { ...s.demo, panelOpen: false } }),
+      partialize: (s) => ({ domain: s.domain, personaId: s.personaId, onboarded: s.onboarded, clockOffsetMs: s.clockOffsetMs, savedAt: Date.now(), demo: { ...s.demo, panelOpen: false }, theme: s.theme }),
       onRehydrateStorage: () => (s) => {
         if (!s) return;
         const savedAt = (s as WeaveStore & { savedAt?: number }).savedAt;

@@ -20,7 +20,7 @@ test.describe('D3', () => {
     await page.clock.fastForward('42:00');
     const pill = device.getByRole('button', { name: /Srinika sleeping, 0:42/ });
     await expect(pill).toBeVisible();
-    await device.getByRole('link', { name: 'Me' }).click();
+    await device.getByRole('link', { name: 'Self care' }).click();
     await expect(pill).toBeVisible();
     await page.reload();
     await expect(pill).toBeVisible();
@@ -52,7 +52,7 @@ test.describe('D3', () => {
 
   test('timeline: All opens seven days with filters; a row edits and deletes', async ({ page }) => {
     const device = page.locator('#device');
-    await device.getByRole('button', { name: 'All', exact: true }).click();
+    await device.getByRole('button', { name: /^All \d+ entries/ }).click();
     await expect(device.getByRole('heading', { name: 'Timeline' })).toBeVisible();
     await expect(device.getByRole('heading', { name: 'Today', exact: true })).toBeVisible();
     await expect(device.getByRole('heading', { name: 'Yesterday' })).toBeVisible();

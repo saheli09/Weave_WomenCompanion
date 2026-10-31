@@ -106,3 +106,21 @@ describe('fewer like this and the Fewer setting (B32, B35)', () => {
     expect(runInsights(rules, { state: s, now: ANCHOR }).map((i) => i.id)).toEqual(['R02', 'R05']);
   });
 });
+
+describe('settling in after onboarding (9.13)', () => {
+  const cands = [
+    { id: 'R10', template: 'R10' as const, scope: 'her' as const, priority: 1, at: ANCHOR.toISOString() },
+    { id: 'R16', template: 'R16' as const, scope: 'her' as const, priority: 1, at: ANCHOR.toISOString(), timeLimited: true },
+    { id: 'R14:x', template: 'R14' as const, scope: 'her' as const, priority: 0, at: ANCHOR.toISOString() },
+  ];
+  const joined = (daysAgo: number) => ({ ...buildPersona('D3'), startedAt: new Date(ANCHOR.getTime() - daysAgo * 864e5).toISOString() });
+
+  it('holds back routine observations for her first three days; escalations and deadlines still show', () => {
+    expect(runInsights([rule('a', cands)], { state: joined(1), now: ANCHOR }).map((i) => i.id)).toEqual(['R14:x', 'R16']);
+  });
+
+  it('shows everything once she has been using Weave for three days, and for sample data', () => {
+    expect(runInsights([rule('a', cands)], { state: joined(3), now: ANCHOR }).map((i) => i.id)).toEqual(['R14:x', 'R16', 'R10']);
+    expect(runInsights([rule('a', cands)], ctx()).map((i) => i.id)).toEqual(['R14:x', 'R16', 'R10']);
+  });
+});

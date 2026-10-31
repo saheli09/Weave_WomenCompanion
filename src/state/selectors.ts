@@ -1,7 +1,9 @@
 import { differenceInMinutes, isSameDay } from 'date-fns';
-import { formatDuration, formatTime, formatTimeSince, parseDate, toISODate } from '../domain/dates';
+import { formatDuration, formatTime, formatTimeCompact, formatTimeSince, parseDate, toISODate } from '../domain/dates';
 import type { Child, DomainState, LogEntry, Medicine, Subject } from '../domain/types';
 import { S } from '../content/strings';
+import { fmt as t } from '../content/copy';
+import { deviceName } from '../domain/devices';
 
 /** Read-side helpers for screens. Pure: (state, now) -> view data. */
 
@@ -46,6 +48,26 @@ export function sleptToday(state: DomainState, now: Date, subject: Subject): num
 
 export function waterToday(state: DomainState, now: Date): number {
   return logsToday(state, now).reduce((n, l) => (l.type === 'water' && isHer(l.subject) ? n + l.glasses : n), 0);
+}
+
+/** Waking hours for water nudges: nothing before or after these. */
+const WATER_DAY = { from: 8, to: 21 };
+/** No glass by this hour, or none for this many hours, counts as overdue. */
+const WATER_FIRST_BY_H = 10;
+const WATER_GAP_H = 3;
+
+/**
+ * Is a glass of water overdue (decision 2026-10-30)? The Hydration tile lights
+ * up instead of an insight card repeating the count. Quiet outside waking
+ * hours and once the day's goal is met.
+ */
+export function waterNudge(state: DomainState, now: Date): { kind: 'none-yet' } | { kind: 'since'; hours: number } | undefined {
+  const h = now.getHours();
+  if (h < WATER_DAY.from || h >= WATER_DAY.to || waterToday(state, now) >= state.her.hydrationGoalGlasses) return undefined;
+  const last = logsToday(state, now).filter((l) => l.type === 'water' && isHer(l.subject)).sort((a, b) => (a.at < b.at ? 1 : -1))[0];
+  if (!last) return h >= WATER_FIRST_BY_H ? { kind: 'none-yet' } : undefined;
+  const hours = Math.floor(differenceInMinutes(now, parseDate(last.at)) / 60);
+  return hours >= WATER_GAP_H ? { kind: 'since', hours } : undefined;
 }
 
 export function latestToday<T extends LogEntry['type']>(state: DomainState, now: Date, type: T) {
@@ -97,7 +119,7 @@ export function timelineText(l: LogEntry, state: DomainState): string {
     case 'diaper':
       return `Diaper · ${l.kind === 'both' ? 'wet and dirty' : l.kind}`;
     case 'sleep':
-      return l.end ? `Woke · ${formatDuration(differenceInMinutes(parseDate(l.end), parseDate(l.start)))} slept` : 'Fell asleep';
+      return l.end ? `Woke · ${formatDuration(differenceInMinutes(parseDate(l.end), parseDate(l.start)))} slept${l.device ? ` · ${deviceName(l.device)}` : ''}` : 'Fell asleep';
     case 'pump':
       return `Pump · ${l.side} · ${volume(l.ml, state.her.units)}`;
     case 'growth':
@@ -165,6 +187,93 @@ export function timelineItems(state: DomainState, now: Date) {
     // Practice contractions are pregnancy content; after the handoff they live in Me, History (9.7).
     .filter((l) => l.type !== 'practice_contraction' || state.her.phase === 'pregnancy')
     .map((l) => ({ id: l.id, subject: subjectLabel(l.subject, state), text: timelineText(l, state), time: formatTime(l.at) }));
+}
+
+// ---------- Today so far, at a glance (decision 2026-11-01) ----------
+
+export interface SoFarTotal {
+  key: string;
+  value: string;
+  label: string;
+  /** "Last 10:15", or for sleep "Woke 6:45". */
+  when: string;
+}
+
+export interface SoFarGroup {
+  subject: { kind: 'child' | 'her'; label: string };
+  totals: SoFarTotal[];
+}
+
+/** Display order of totals within a person. */
+const SO_FAR_ORDER: string[] = ['feed', 'meal', 'diaper', 'sleep', 'pump', 'dose', 'water', 'mood', 'period', 'bleeding', 'symptom', 'pain', 'pelvic_floor', 'weight', 'reaction', 'growth', 'note', 'practice_contraction'];
+
+/** "Feed|Feeds" by count. */
+const plural = (entry: { text: string }, n: number) => entry.text.split('|')[n === 1 ? 0 : 1]!;
+
+/**
+ * Today so far as totals per person: how many feeds, diapers, glasses…
+ * and when the last one was. The same logs as the timeline; the full list is
+ * one tap away on All.
+ */
+export function daySoFar(state: DomainState, now: Date): { groups: SoFarGroup[]; count: number } {
+  const logs = logsToday(state, now)
+    .filter((l) => !(l.type === 'growth' && l.source === 'derived'))
+    .filter((l) => l.type !== 'practice_contraction' || state.her.phase === 'pregnancy')
+    .filter((l) => !(l.type === 'period' && l.event === 'end'));
+  const bySubject = new Map<string, { subject: SoFarGroup['subject']; logs: LogEntry[] }>();
+  for (const l of [...logs].reverse()) {
+    const key = l.subject.kind === 'her' ? 'her' : l.subject.childId;
+    if (!bySubject.has(key)) bySubject.set(key, { subject: subjectLabel(l.subject, state), logs: [] });
+    bySubject.get(key)!.logs.push(l);
+  }
+  const groups: SoFarGroup[] = [...bySubject.values()]
+    .sort((a, b) => (a.subject.kind === b.subject.kind ? 0 : a.subject.kind === 'child' ? -1 : 1))
+    .map(({ subject, logs: ls }) => {
+      const of = <T extends LogEntry['type']>(type: T) => ls.filter((l): l is Extract<LogEntry, { type: T }> => l.type === type);
+      const totals: SoFarTotal[] = [];
+      const latest = (xs: LogEntry[]) => xs.reduce<LogEntry | undefined>((a, l) => (!a || l.at > a.at ? l : a), undefined);
+      const last = (xs: LogEntry[]) => t(S.soFarLast, { time: formatTimeCompact(latest(xs)!.at) });
+      const add = (key: string, value: string | number, label: string, xs: LogEntry[], when = last(xs)) => totals.push({ key, value: String(value), label, when });
+      const feeds = of('feed').filter((l) => l.mode !== 'solids');
+      const meals = of('feed').filter((l) => l.mode === 'solids');
+      if (feeds.length) add('feed', feeds.length, plural(S.soFarFeed, feeds.length), feeds);
+      if (meals.length) add('meal', meals.length, plural(S.soFarMeal, meals.length), meals);
+      if (of('diaper').length) add('diaper', of('diaper').length, plural(S.soFarDiaper, of('diaper').length), of('diaper'));
+      const sleeps = of('sleep').filter((l) => l.end);
+      const slept = sleeps.reduce((m, l) => m + differenceInMinutes(parseDate(l.end!), parseDate(l.start)), 0);
+      const woke = sleeps.reduce((a, l) => (l.end! > a ? l.end! : a), '');
+      if (slept) add('sleep', formatDuration(slept), S.soFarSleep.text, sleeps, t(S.soFarWoke, { time: woke ? formatTimeCompact(woke) : '' }));
+      if (of('pump').length) add('pump', of('pump').length, plural(S.soFarPump, of('pump').length), of('pump'));
+      if (of('dose').length) add('dose', of('dose').length, plural(S.soFarDose, of('dose').length), of('dose'));
+      const glasses = of('water').reduce((n, l) => n + l.glasses, 0);
+      if (glasses) add('water', glasses, plural(S.soFarWater, glasses), of('water'));
+      const mood = of('mood').at(-1);
+      if (mood) add('mood', cap(mood.value), S.mood.text, [mood]);
+      const period = of('period').at(-1);
+      if (period) add('period', cap(period.flow), S.period.text, [period]);
+      const bleeding = of('bleeding').at(-1);
+      if (bleeding) add('bleeding', cap(bleeding.level), S.bleeding.text, [bleeding]);
+      const counted: [LogEntry['type'], { text: string }][] = [
+        ['symptom', S.soFarSymptom],
+        ['pain', S.soFarPain],
+        ['reaction', S.soFarReaction],
+        ['growth', S.soFarGrowth],
+        ['note', S.soFarNote],
+        ['practice_contraction', S.soFarPractice],
+      ];
+      for (const [type, entry] of counted) {
+        const xs = ls.filter((l) => l.type === type);
+        if (xs.length) add(type, xs.length, plural(entry, xs.length), xs);
+      }
+      const sets = of('pelvic_floor').reduce((n, l) => n + l.sets, 0);
+      if (sets) add('pelvic_floor', sets, plural(S.soFarPelvic, sets), of('pelvic_floor'));
+      const weight = of('weight').at(-1);
+      if (weight) add('weight', `${weight.kg.toFixed(1)} kg`, S.meWeight.text, [weight]);
+      totals.sort((a, b) => SO_FAR_ORDER.indexOf(a.key) - SO_FAR_ORDER.indexOf(b.key));
+      return { subject, totals };
+    })
+    .filter((g) => g.totals.length);
+  return { groups, count: logs.length };
 }
 
 // ---------- Quick-log "time since" (5.2) ----------

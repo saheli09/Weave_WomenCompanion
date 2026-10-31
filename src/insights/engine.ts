@@ -58,6 +58,18 @@ export function inQuietPeriod(state: DomainState, now: Date): boolean {
   const ended = [...state.history].reverse().find((h) => h.outcome === 'ended');
   return Boolean(ended && now.getTime() - new Date(ended.endedAt).getTime() < QUIET_AFTER_LOSS_DAYS * 864e5);
 }
+/**
+ * Her first days after onboarding: Weave has nothing of hers to notice yet, so
+ * routine observations wait (a weekly count would otherwise start at zero on
+ * the day she joins). Escalations and time-limited cards still show. This is
+ * the "after a few days" the welcome card promises (9.13).
+ */
+export const SETTLING_DAYS = 3;
+
+export function settlingIn(state: DomainState, now: Date): boolean {
+  return Boolean(state.startedAt && now.getTime() - new Date(state.startedAt).getTime() < SETTLING_DAYS * 864e5);
+}
+
 export const SNOOZE_MS = 24 * 3600_000;
 /** Settings "Fewer" (B35): at most two info cards. */
 export const FEWER_MAX = 2;
@@ -101,12 +113,14 @@ export function runInsights(rules: Rule[], ctx: InsightContext): RenderedInsight
   const memory = ctx.state.insightMemory;
   const t = ctx.now.getTime();
   const quiet = inQuietPeriod(ctx.state, ctx.now);
+  const settling = settlingIn(ctx.state, ctx.now);
   const fewer = ctx.state.settings?.insightFrequency === 'fewer';
   const candidates = rules
     .flatMap((r) => r.evaluate(ctx))
     .filter((c) => {
       if (TEMPLATES[c.template].severity === 'escalate') return true; // safety cards always show
       if (quiet) return false;
+      if (settling && !c.timeLimited) return false;
       // "Show fewer like this" (B32) mutes a rule for a week.
       const muted = memory[`rule:${TEMPLATES[c.template].ruleId}`]?.snoozedUntil;
       if (muted && new Date(muted).getTime() > t) return false;

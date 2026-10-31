@@ -23,7 +23,7 @@ import {
   removeAppointment,
   setChecklist,
 } from './transitions';
-import { deriveTodayState, postpartumLabel, currentPeriodDay } from './stage';
+import { deriveTodayState, postpartumLabel, pregnantWithChild, currentPeriodDay, stageTab } from './stage';
 
 const now = new Date('2026-08-27T10:30:00');
 const later = (mins: number) => new Date(now.getTime() + mins * 60_000);
@@ -205,5 +205,41 @@ describe('appointments and checklist (B30, 9.5)', () => {
     expect(setChecklist(s0(), { hospitalBag: 'packed' }).her.pregnancy!.checklist).toEqual({ birthPlanShared: false, hospitalBag: 'packed' });
     const cycle = onboard('Saheli', { kind: 'tracking_cycle' }, now);
     expect(() => setChecklist(cycle, { hospitalBag: 'packed' })).toThrow(TransitionError);
+  });
+});
+
+describe('onboarding (9.13)', () => {
+  const at = new Date(2026, 7, 27, 10, 30);
+  it('marks when she started and greets her once', () => {
+    const s = onboard('Asha', { kind: 'pregnant', dueDate: '2027-01-06' }, at);
+    expect(s.startedAt).toBe(at.toISOString());
+    expect(s.prompts.welcome).toBe(true);
+  });
+  it('a finished last period is not read as a period in progress; an ongoing one is', () => {
+    const done = onboard('Asha', { kind: 'tracking_cycle', lastPeriodStart: '2026-08-16' }, at);
+    expect(currentPeriodDay(done, at)).toBeUndefined();
+    const ongoing = onboard('Asha', { kind: 'tracking_cycle', lastPeriodStart: '2026-08-25', ongoing: true }, at);
+    expect(currentPeriodDay(ongoing, at)).toBe(3);
+  });
+});
+
+describe('the fourth tab follows her journey (decision 2026-10-28)', () => {
+  const at = new Date(2026, 7, 27, 10, 30);
+  it('pregnant: Pregnancy; cycle tracking: Cycle; a baby: Baby', () => {
+    expect(stageTab(onboard('A', { kind: 'pregnant', dueDate: '2027-01-06' }, at), at)).toBe('pregnancy');
+    expect(stageTab(onboard('A', { kind: 'tracking_cycle' }, at), at)).toBe('cycle');
+    expect(stageTab(onboard('A', { kind: 'have_baby', child: { name: 'M', dob: '2026-08-01', feeding: ['breast'] } }, at), at)).toBe('baby');
+  });
+  it('pregnant with a child: Baby keeps the tab at any age; the pregnancy sits in Self care (decision 2026-10-31)', () => {
+    const young = onboard('A', { kind: 'pregnant_with_child', dueDate: '2027-02-20', child: { name: 'K', dob: '2025-06-10', feeding: ['solids'] } }, at);
+    expect(stageTab(young, at)).toBe('baby');
+    expect(pregnantWithChild(young)).toBe(true);
+    const older = onboard('A', { kind: 'pregnant_with_child', dueDate: '2027-02-20', child: { name: 'K', dob: '2024-06-10', feeding: ['solids'] } }, at);
+    expect(stageTab(older, at)).toBe('baby');
+    expect(pregnantWithChild(onboard('A', { kind: 'pregnant', dueDate: '2027-01-06' }, at))).toBe(false);
+  });
+  it('adding a child to a cycle tracker switches the tab to Baby', () => {
+    const s = addChild(onboard('A', { kind: 'tracking_cycle' }, at), { name: 'M', dob: '2026-05-01', feeding: ['breast'] }).state;
+    expect(stageTab(s, at)).toBe('baby');
   });
 });

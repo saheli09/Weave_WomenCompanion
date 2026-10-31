@@ -50,6 +50,16 @@ describe('token contrast (WCAG 2.1 AA)', () => {
   });
 });
 
+/** Dark mode (decision 2026-10-30): the same pairs on the dark tokens; a token it does not override keeps its light value. */
+const darkBlock = css.slice(css.indexOf("[data-theme='dark']"));
+const darkToken = (name: string): string => darkBlock.match(new RegExp(`--color-${name}:\\s*(#[0-9a-fA-F]{6})`))?.[1] ?? token(name);
+
+describe('token contrast, dark mode (WCAG 2.1 AA)', () => {
+  it.each(PAIRS)('%s on %s is at least %s:1 (%s)', (fg, bg, min) => {
+    expect(contrast(darkToken(fg), darkToken(bg))).toBeGreaterThanOrEqual(min);
+  });
+});
+
 /**
  * Known failure kept from Figma pending a design decision: the FAB "+" in white
  * on the coral gradient is 2.1:1 to 2.8:1 (needs 3:1). Logged in FIGMA-DEVIATIONS.md.

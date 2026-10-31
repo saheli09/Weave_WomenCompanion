@@ -1,7 +1,8 @@
 import { buildPersona, ANCHOR } from '../state/personas';
-import { cycleDay, cycleDayNumber, cycleLengths, cycleTimeline, endPeriod, FERTILE_DAYS_BEFORE, LUTEAL_DAYS, logPeriodDay, nextPeriodEstimate, periodRuns, periodStarts, removePeriodDay } from './cycle';
+import { cycleDay, cyclePhases, cycleDayNumber, cycleLengths, cycleTimeline, endPeriod, FERTILE_DAYS_BEFORE, LUTEAL_DAYS, logPeriodDay, nextPeriodEstimate, periodRuns, periodStarts, removePeriodDay } from './cycle';
 import { currentPeriodDay } from './stage';
 import { checkInvariants, TransitionError } from './transitions';
+import { addDaysISO } from './dates';
 
 describe('cycle tracking (B25)', () => {
   it('D4: three period days, day 3 today; logging the next day continues the period', () => {
@@ -84,5 +85,32 @@ describe('cycle estimates: ovulation, fertile window, predictions (9.8)', () => 
     const tl = cycleTimeline(s.her.cycle.periodDays!, new Date(2026, 10, 2, 10, 30))!;
     const last = tl.cycles.filter((c) => c.kind === 'predicted').at(-1)!;
     expect(last.start >= '2027-02-01' && last.start <= '2027-02-28').toBe(true);
+  });
+});
+
+describe('cycle phases (decision 2026-10-28)', () => {
+  const run = (start: string, n: number) => Array.from({ length: n }, (_, i) => addDaysISO(start, i));
+  const days = [...run('2026-06-01', 5), ...run('2026-06-29', 5), ...run('2026-07-27', 5), ...run('2026-08-24', 4)];
+  const tl = (now: Date) => cycleTimeline(days, now);
+
+  it('splits the current cycle into its five phases from the calendar estimates', () => {
+    const now = new Date(2026, 7, 27, 10);
+    const p = cyclePhases(tl(now), now)!;
+    expect(p.phases.map((x) => [x.key, x.start, x.end])).toEqual([
+      ['period', '2026-08-24', '2026-08-28'],
+      ['follicular', '2026-08-29', '2026-09-01'],
+      ['fertile', '2026-09-02', '2026-09-06'],
+      ['ovulation', '2026-09-07', '2026-09-07'],
+      ['luteal', '2026-09-08', '2026-09-20'],
+    ]);
+    expect(p.today).toBe('period');
+    expect(p.day).toBe(4);
+    expect(p.phases.reduce((n, x) => n + x.days, 0)).toBe(p.length);
+  });
+
+  it('marks today in the fertile window, and is undefined before two cycles are complete', () => {
+    const now = new Date(2026, 8, 3, 10);
+    expect(cyclePhases(tl(now), now)!.today).toBe('fertile');
+    expect(cyclePhases(cycleTimeline(run('2026-08-24', 4), now), now)).toBeUndefined();
   });
 });

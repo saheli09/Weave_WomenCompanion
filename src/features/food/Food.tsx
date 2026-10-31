@@ -3,7 +3,7 @@ import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-
 import { S } from '../../content/strings';
 import { fmt } from '../../content/copy';
 import { FOODS, foodName, slugFood } from '../../content/foods';
-import { RECIPE_REVIEW, recipeById } from '../../content/recipes';
+import { RECIPE_REVIEW, recipeById, recipePhoto } from '../../content/recipes';
 import { TEMPLATES } from '../../insights/templates';
 import { SUPPORT } from '../../content/support';
 import { BottomSheet } from '../../components/Sheet';
@@ -163,9 +163,11 @@ function SolidsSheet({ child, onClose }: { child: Child; onClose: () => void }) 
 /* --------------------------------------------- Today: meal card and R07 */
 
 /**
- * Today's meal card (S02, R08): a white card, not sage, as designed. It leads
- * with the next meal as in the frame. The other three slots of the day open
- * under it on demand (design addition): what was logged, or a suggestion.
+ * Today's meal card (S02, R08): a white card, not sage, as designed. The card is
+ * headed "Today's meals" and each meal carries its own slot subheading, so the
+ * other meals don't read as part of the lead one. It leads with the next meal for
+ * the time of day; the other three slots open under it on demand (design
+ * addition): what was logged, or a suggestion.
  */
 export function MealCard({ state, now, child }: { state: DomainState; now: Date; child: Child }) {
   const navigate = useNavigate();
@@ -176,38 +178,34 @@ export function MealCard({ state, now, child }: { state: DomainState; now: Date;
   const open = (p: MealPlanSlot) => navigate(`/food/recipe/${p.recipe!.id}?slot=${p.slot}`);
   const [expanded, setExpanded] = useState(false);
   const listId = useId();
-  // Compact (about a quarter of the screen): the recipe link sits on the name row and
+  // Compact (about a quarter of the screen): the recipe arrow sits on the name row and
   // "All meals today" is a quiet link, so the child and Me cards stay on the first screen.
   return (
     <ReviewFlag review={RECIPE_REVIEW} className="rounded-card">
       <article data-testid="meal-card" className="flex w-full flex-col gap-2 rounded-card bg-surface p-5">
         <div className="flex items-center gap-1.5">
           <span aria-hidden className="size-1.5 rounded-full bg-ink-3" />
-          <span className="type-micro text-ink-2">{lead ? fmt(S.mealCardTag, { slot: lead.slot }) : S.mealsCardTag.text}</span>
+          <span className="type-micro text-ink-2">{S.mealsCardTag.text}</span>
         </div>
         {lead?.recipe ? (
-          <div className="flex flex-col gap-1">
-            <div className="flex items-baseline justify-between gap-3">
+          <div data-testid="meal-lead" className="flex flex-col gap-1">
+            <SlotHeading slot={lead.slot} />
+            <div className="flex items-center justify-between gap-3">
               <h3 className="type-insight min-w-0 text-ink">{lead.recipe.name}</h3>
-              <MealLink onClick={() => open(lead)} className="text-ink-2">
-                {S.mealViewRecipe.text}
-              </MealLink>
+              <RecipeArrow onClick={() => open(lead)} label={fmt(S.mealViewRecipe, { recipe: lead.recipe.name })} />
             </div>
             <div className="type-secondary text-ink-3">{S.mealSafeLine.text}</div>
           </div>
         ) : lead ? (
-          <div className="flex items-baseline justify-between gap-3">
-            <h3 className="type-prompt min-w-0 text-ink">{S.mealNone.text}</h3>
-            <MealLink onClick={() => navigate('/baby/food')} className="text-ink-2">
-              {S.mealNoneLink.text}
-            </MealLink>
+          <div data-testid="meal-lead" className="flex flex-col gap-1">
+            <SlotHeading slot={lead.slot} />
+            <div className="flex items-baseline justify-between gap-3">
+              <h3 className="type-prompt min-w-0 text-ink">{S.mealNone.text}</h3>
+              <MealLink onClick={() => navigate('/baby/food')} className="text-ink-2">
+                {S.mealNoneLink.text}
+              </MealLink>
+            </div>
           </div>
-        ) : null}
-        {lead ? (
-          <MealLink aria-expanded={expanded} aria-controls={listId} onClick={() => setExpanded((e) => !e)} className="self-start text-ink-3">
-            {expanded ? S.mealsHide.text : S.mealsShowAll.text}
-            <Chevron className={`transition-transform ${expanded ? '-rotate-90' : 'rotate-90'}`} />
-          </MealLink>
         ) : null}
         {expanded || !lead ? (
           <div id={listId} className="flex flex-col gap-1">
@@ -223,6 +221,18 @@ export function MealCard({ state, now, child }: { state: DomainState; now: Date;
             </ul>
           </div>
         ) : null}
+        {lead ? (
+          <button
+            type="button"
+            aria-expanded={expanded}
+            aria-controls={listId}
+            onClick={() => setExpanded((e) => !e)}
+            className="hit-44 inline-flex items-center gap-1 self-start font-sans text-[12px] font-medium text-ink-3 active:opacity-70"
+          >
+            {expanded ? S.mealsHide.text : S.mealsShowAll.text}
+            <Chevron className={`h-2 w-auto transition-transform ${expanded ? '-rotate-90' : 'rotate-90'}`} />
+          </button>
+        ) : null}
       </article>
     </ReviewFlag>
   );
@@ -237,16 +247,57 @@ function MealLink({ className = '', children, ...rest }: React.ButtonHTMLAttribu
   );
 }
 
+/** Slot subheading for one meal (Breakfast, Lunch, Snack, Dinner). */
+function SlotHeading({ slot }: { slot: MealSlot }) {
+  return <span className="font-sans text-[12px] font-semibold text-ink-2">{SLOTS.find((s) => s.value === slot)!.label}</span>;
+}
+
+/** Round arrow beside the recipe name that opens the recipe; 44px hit area through hit-44. */
+function RecipeArrow({ onClick, label }: { onClick: () => void; label: string }) {
+  return (
+    <button type="button" onClick={onClick} aria-label={label} className={`hit-44 ${ARROW_CIRCLE} active:opacity-70`}>
+      <Chevron />
+    </button>
+  );
+}
+
+/** The circled arrow shared by the lead meal and the rows of the day. */
+const ARROW_CIRCLE = 'flex size-8 shrink-0 items-center justify-center rounded-full border border-line text-ink-2';
+
+/** One meal in the expanded day: the slot subheading above what was logged or suggested. */
 function MealRow({ plan, state, onOpen }: { plan: MealPlanSlot; state: DomainState; onOpen: () => void }) {
   const meta = SLOTS.find((s) => s.value === plan.slot)!;
-  const leading = <Icon name={meta.icon} size={24} />;
-  if (plan.fed) {
-    const food = plan.recipe?.name ?? capitalise(plan.fed.foodIds.map((id) => foodName(id, state.customFoods)).join(', '));
-    const time = formatTimeCompact(plan.fed.at);
-    return <ListRow leading={leading} label={food} sublabel={meta.label} value={time} />;
-  }
-  if (!plan.recipe) return <ListRow leading={leading} label={S.mealRowNone.text} sublabel={meta.label} muted />;
-  return <ListRow leading={leading} label={plan.recipe.name} sublabel={meta.label} chevron onClick={onOpen} a11yLabel={fmt(S.mealRowA11y, { slot: meta.label, recipe: plan.recipe.name })} />;
+  const fed = plan.fed;
+  const name = fed ? (plan.recipe?.name ?? capitalise(fed.foodIds.map((id) => foodName(id, state.customFoods)).join(', '))) : (plan.recipe?.name ?? S.mealRowNone.text);
+  const body = (
+    <>
+      <span className="flex min-w-0 items-center gap-2.5">
+        <Icon name={meta.icon} size={24} />
+        <span className="flex min-w-0 flex-col gap-[3px]">
+          <SlotHeading slot={plan.slot} />
+          <span className={`type-secondary font-semibold ${!fed && !plan.recipe ? 'font-medium text-ink-3' : 'text-ink'}`}>{name}</span>
+        </span>
+      </span>
+      {fed ? <span className="type-secondary shrink-0 text-ink-2">{formatTimeCompact(fed.at)}</span> : null}
+      {!fed && plan.recipe ? (
+        <span aria-hidden className={ARROW_CIRCLE}>
+          <Chevron />
+        </span>
+      ) : null}
+    </>
+  );
+  const cls = 'flex min-h-[44px] w-full items-center justify-between gap-3 py-3 text-left';
+  return (
+    <li>
+      {!fed && plan.recipe ? (
+        <button type="button" onClick={onOpen} aria-label={fmt(S.mealRowA11y, { slot: meta.label, recipe: plan.recipe.name })} className={cls}>
+          {body}
+        </button>
+      ) : (
+        <div className={cls}>{body}</div>
+      )}
+    </li>
+  );
 }
 
 /** First-food prompt (R07, 9.9): stays 72 hours or until "Not now" (24 hours), then retires into the journal. */
@@ -295,12 +346,14 @@ export function RecipeScreen() {
   const recipe = id ? recipeById(id) : undefined;
   if (!recipe || !child) return <Navigate to="/today" replace />;
   const slot = (params.get('slot') as MealSlot | null) ?? slotForTime(clockNow());
+  const photo = recipePhoto(recipe.id);
   return (
     <div className="flex flex-col gap-6" data-screen="recipe">
       <div className="flex flex-col gap-5">
         <button type="button" onClick={() => navigate(-1)} className="hit-44 self-start type-micro text-ink-3">
           ‹ {S.back.text}
         </button>
+        {photo ? <img src={photo} alt={fmt(S.recipePhotoAlt, { recipe: recipe.name })} className="aspect-[3/2] w-full rounded-card bg-line object-cover" /> : null}
         <div className="flex flex-col gap-[5px]">
           <h1 className="type-greeting text-ink">{recipe.name}</h1>
           <p className="font-sans text-[13px] font-medium text-ink-2">{S.mealSafeLine.text}</p>
@@ -311,11 +364,18 @@ export function RecipeScreen() {
           </span>
         ) : null}
       </div>
+      <dl data-testid="recipe-times" className="grid grid-cols-3 rounded-card bg-surface py-4 [&>div+div]:border-l [&>div+div]:border-line">
+        <RecipeFact label={S.recipePrep.text} value={fmt(S.recipeMinutes, { n: recipe.prepMin })} />
+        <RecipeFact label={S.recipeCook.text} value={recipe.cookMin ? fmt(S.recipeMinutes, { n: recipe.cookMin }) : S.recipeNoCook.text} />
+        <RecipeFact label={S.recipeMakes.text} value={S.recipePortion.text} />
+      </dl>
       <Section label={S.recipeIngredients.text}>
         <ListCard>
-          {recipe.ingredients.map((i) => (
-            <ListRow key={i} label={capitalise(foodName(i))} value={FOODS[i]?.allergen ?? ''} />
-          ))}
+          {recipe.ingredients.map((i) => {
+            const allergen = FOODS[i]?.allergen;
+            return <ListRow key={i} label={capitalise(foodName(i))} sublabel={allergen ? fmt(S.recipeAllergen, { group: allergen }) : undefined} value={recipe.amounts[i]} />;
+          })}
+          {recipe.water ? <ListRow label={S.recipeWater.text} value={recipe.water} /> : null}
         </ListCard>
       </Section>
       <Section label={S.recipeSteps.text}>
@@ -340,6 +400,16 @@ export function RecipeScreen() {
       >
         {S.recipeMarkFed.text}
       </PrimaryButton>
+    </div>
+  );
+}
+
+/** One cell of the recipe's prep, cook and portion strip. */
+function RecipeFact({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex flex-col items-center gap-1 px-2 text-center">
+      <dt className="type-micro text-ink-3">{label}</dt>
+      <dd className="type-secondary font-semibold text-ink">{value}</dd>
     </div>
   );
 }

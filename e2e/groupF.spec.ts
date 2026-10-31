@@ -34,7 +34,7 @@ test('Ask: state-aware chips, grounded answers, health deflection with a note, r
 test('settings: units change everywhere; Fewer observations; sharing is UI only', async ({ page }) => {
   await start(page, 'D3');
   const device = page.locator('#device');
-  await device.getByRole('link', { name: 'Me' }).click();
+  await device.getByRole('link', { name: 'Self care' }).click();
   await device.getByRole('button', { name: 'Settings' }).click();
   await expect(device.getByRole('heading', { name: 'Settings' })).toBeVisible();
   await device.getByRole('radio', { name: 'oz' }).click();
@@ -44,8 +44,9 @@ test('settings: units change everywhere; Fewer observations; sharing is UI only'
   await page.keyboard.press('Escape');
   await expectTapTargets(page);
   await device.getByRole('link', { name: 'Today' }).click();
-  await expect(device.getByText('Feed · formula · 2oz')).toBeVisible();
   await expect(device.locator('[aria-roledescription="slide"]')).toHaveCount(2);
+  await device.getByRole('button', { name: /^All \d+ entr/ }).click();
+  await expect(device.getByText('Feed · formula · 2oz').first()).toBeVisible();
 });
 
 test('history after a birth lists the archived pregnancy', async ({ page }) => {
@@ -57,23 +58,37 @@ test('history after a birth lists the archived pregnancy', async ({ page }) => {
   await expect(device.getByText('Medicines: Cipcal XT, Ferrogen XT')).toBeVisible();
 });
 
-test('onboarding: five screens to the right Today', async ({ page }) => {
+test('onboarding: three screens to the right Today', async ({ page }) => {
   await start(page, 'D3');
   const device = page.locator('#device');
   await page.goto('/onboarding');
-  await device.getByRole('button', { name: 'Get started' }).click();
+  await device.getByRole('button', { name: 'Continue without an account' }).click();
   await device.getByRole('radio', { name: 'I have a baby' }).click();
   await device.getByRole('button', { name: 'Continue' }).click();
-  await device.getByRole('button', { name: 'Continue' }).click();
+  await device.getByRole('button', { name: 'Open Weave' }).click();
   await expect(device.getByText('Add your name.')).toBeVisible();
   await device.getByLabel('Your name').fill('Asha');
   await device.getByLabel('Child’s name').fill('Mira');
   await device.getByLabel('Child’s date of birth').fill('2026-08-01');
-  await device.getByRole('button', { name: 'Continue' }).click();
-  await device.getByRole('button', { name: 'Continue' }).click();
-  await expect(device.getByRole('heading', { name: 'Your data stays with you' })).toBeVisible();
   await device.getByRole('button', { name: 'Open Weave' }).click();
   await expect(device.getByRole('heading', { name: 'Good morning, Asha' })).toBeVisible();
   await expect(device.getByText('Mira’s Age: 26d')).toBeVisible();
   await expect(device.getByText('Nothing logged yet today.')).toBeVisible(); // empty state
+});
+
+test('appearance: System follows the phone; Light and Dark stick across a reload', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await start(page, 'D7');
+  const device = page.locator('#device');
+  await expect(device).toHaveAttribute('data-theme', 'dark'); // System, phone is dark
+  await page.goto('/settings');
+  const appearance = device.getByRole('radiogroup', { name: 'Appearance' });
+  await expect(appearance.getByRole('radio', { name: 'System' })).toHaveAttribute('aria-checked', 'true');
+  await appearance.getByRole('radio', { name: 'Light' }).click();
+  await expect(device).toHaveAttribute('data-theme', 'light');
+  await page.reload();
+  await expect(device).toHaveAttribute('data-theme', 'light');
+  await device.getByRole('radiogroup', { name: 'Appearance' }).getByRole('radio', { name: 'Dark' }).click();
+  await page.emulateMedia({ colorScheme: 'light' });
+  await expect(device).toHaveAttribute('data-theme', 'dark'); // her choice beats the phone
 });

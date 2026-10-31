@@ -3,7 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { S } from '../../content/strings';
 import { fmt } from '../../content/copy';
 import { Copy } from '../../components/Copy';
-import { ListCard, ListRow, Section } from '../../components/Cards';
+import { AddRow, ListCard, ListRow, Section } from '../../components/Cards';
+import { AddChildSheet } from './AddChild';
+import { ageWords } from '../onboarding/Onboarding';
+import { now as clockNow } from '../../state/clock';
 import { FilterChip } from '../../components/Chip';
 import { NumberStepper } from '../../components/Stepper';
 import { Field, fieldCls } from '../../components/Form';
@@ -11,6 +14,7 @@ import { PrimaryButton, SecondaryButton, TextAction } from '../../components/But
 import { BottomSheet } from '../../components/Sheet';
 import { EmptyState } from '../../components/States';
 import { DEFAULT_SETTINGS, updateSettings } from '../../domain/transitions';
+import { connectDevice, DEVICES, deviceName, disconnectDevice, type DeviceId } from '../../domain/devices';
 import { formatDayMonth, formatDuration, formatLongDate, parseDate } from '../../domain/dates';
 import { labourStats } from '../../domain/labour';
 import { deleteEverything, exportEverything, useDomain, useWeave } from '../../state/store';
@@ -52,6 +56,8 @@ export function SettingsScreen() {
   const state = useDomain();
   const apply = useWeave((s) => s.apply);
   const setPanelOpen = useWeave((s) => s.setPanelOpen);
+  const theme = useWeave((s) => s.theme);
+  const setTheme = useWeave((s) => s.setTheme);
   const navigate = useNavigate();
   const toast = useToast();
   const { openSharing } = useSharing();
@@ -60,24 +66,61 @@ export function SettingsScreen() {
   const [providerPhone, setProviderPhone] = useState(state.her.provider?.phone ?? '');
   const [partner, setPartner] = useState(state.her.partnerName ?? '');
   const [confirm, setConfirm] = useState(false);
+  const [addingChild, setAddingChild] = useState(false);
+  const [device, setDevice] = useState<DeviceId | null>(null);
   const set = (patch: Parameters<typeof updateSettings>[1]) => apply((s) => updateSettings(s, patch));
+  // Baby-only settings (feed volumes, formula tins) stay out of the way of someone only tracking her cycle.
+  const hasChild = state.children.length > 0;
+  const babyCare = hasChild || state.her.phase === 'postpartum';
+
+  const children = (
+    <>
+      <Section label={S.settingsChildren.text}>
+        <ListCard>
+          {state.children.map((c) => (
+            <ListRow key={c.id} size="lg" label={c.name} value={`${ageWords(c.dob, clockNow())} old`} />
+          ))}
+          <AddRow label={S.addChildRow.text} onClick={() => setAddingChild(true)} />
+        </ListCard>
+      </Section>
+      <AddChildSheet open={addingChild} onOpenChange={setAddingChild} />
+    </>
+  );
 
   return (
     <div className="flex flex-col gap-6" data-screen="settings">
       <BackHeader title={S.settingsTitle.text} />
 
+      {/* Her children come first; with none yet, adding one waits near the end. */}
+      {hasChild ? children : null}
+
+      <Section label={S.settingsAppearance.text}>
+        <div className="flex flex-col gap-2">
+          <div role="radiogroup" aria-label={S.settingsAppearance.text} className="flex gap-2">
+            {(['system', 'light', 'dark'] as const).map((th) => (
+              <FilterChip key={th} role="radio" aria-checked={theme === th} selected={theme === th} onClick={() => setTheme(th)}>
+                {th === 'system' ? S.settingsThemeSystem.text : th === 'light' ? S.settingsThemeLight.text : S.settingsThemeDark.text}
+              </FilterChip>
+            ))}
+          </div>
+          <p className="font-sans text-[12px] text-ink-2">{S.settingsThemeHint.text}</p>
+        </div>
+      </Section>
+
       <Section label={S.settingsUnits.text}>
         <div className="flex flex-col gap-3 rounded-card bg-surface p-5">
-          <div className="flex items-center justify-between gap-3">
-            <span className="type-row text-ink">{S.settingsVolume.text}</span>
-            <div role="radiogroup" aria-label={S.settingsVolume.text} className="flex gap-2">
-              {(['ml', 'oz'] as const).map((u) => (
-                <FilterChip key={u} role="radio" aria-checked={state.her.units.volume === u} selected={state.her.units.volume === u} onClick={() => set({ units: { volume: u } })}>
-                  {u}
-                </FilterChip>
-              ))}
+          {babyCare ? (
+            <div className="flex items-center justify-between gap-3">
+              <span className="type-row text-ink">{S.settingsVolume.text}</span>
+              <div role="radiogroup" aria-label={S.settingsVolume.text} className="flex gap-2">
+                {(['ml', 'oz'] as const).map((u) => (
+                  <FilterChip key={u} role="radio" aria-checked={state.her.units.volume === u} selected={state.her.units.volume === u} onClick={() => set({ units: { volume: u } })}>
+                    {u}
+                  </FilterChip>
+                ))}
+              </div>
             </div>
-          </div>
+          ) : null}
           <div className="flex items-center justify-between gap-3">
             <span className="type-row text-ink">{S.settingsWeight.text}</span>
             <div role="radiogroup" aria-label={S.settingsWeight.text} className="flex gap-2">
@@ -111,11 +154,23 @@ export function SettingsScreen() {
       <Section label={S.settingsNotifications.text}>
         <ListCard>
           <Toggle label={S.settingsNotifyDoses.text} checked={settings.notifications.doses} onChange={(v) => set({ settings: { notifications: { ...settings.notifications, doses: v } } })} />
-          <Toggle label={S.settingsNotifyTins.text} checked={settings.notifications.tins} onChange={(v) => set({ settings: { notifications: { ...settings.notifications, tins: v } } })} />
+          {babyCare ? (
+            <Toggle label={S.settingsNotifyTins.text} checked={settings.notifications.tins} onChange={(v) => set({ settings: { notifications: { ...settings.notifications, tins: v } } })} />
+          ) : null}
           <Toggle label={S.settingsNotifyInsights.text} checked={settings.notifications.insights} onChange={(v) => set({ settings: { notifications: { ...settings.notifications, insights: v } } })} />
         </ListCard>
         <p className="font-sans text-[12px] text-ink-2">{S.settingsNotificationsMock.text}</p>
       </Section>
+
+      <Section label={S.settingsDevices.text}>
+        <ListCard>
+          {DEVICES.map((d) => (
+            <ListRow key={d.id} size="lg" label={d.name} value={state.devices?.connected === d.id ? S.deviceConnected.text : undefined} chevron onClick={() => setDevice(d.id)} />
+          ))}
+        </ListCard>
+        <p className="font-sans text-[12px] text-ink-2">{S.settingsDevicesHint.text}</p>
+      </Section>
+      <DeviceSheet device={device} onClose={() => setDevice(null)} />
 
       <Section label={S.settingsPeople.text}>
         <div className="flex flex-col gap-4 rounded-card bg-surface p-5">
@@ -143,6 +198,8 @@ export function SettingsScreen() {
         </div>
       </Section>
 
+      {hasChild ? null : children}
+
       <Section label={S.settingsData.text}>
         <div className="flex flex-col gap-3 rounded-card bg-surface p-5">
           <p className="font-sans text-[13px] text-ink-2">{S.settingsDataNote.text}</p>
@@ -161,6 +218,54 @@ export function SettingsScreen() {
         </ListCard>
       </Section>
     </div>
+  );
+}
+
+/** Connect or disconnect one app. UI only: connecting fills in sample readings on this phone. */
+function DeviceSheet({ device, onClose }: { device: DeviceId | null; onClose: () => void }) {
+  const current = useDomain().devices?.connected;
+  const apply = useWeave((s) => s.apply);
+  const toast = useToast();
+  const name = device ? deviceName(device) : '';
+  const connected = Boolean(device) && current === device;
+  return (
+    <BottomSheet open={Boolean(device)} onOpenChange={(o) => !o && onClose()} title={fmt(S.deviceConnectTitle, { name })}>
+      <div className="flex flex-col gap-4 pb-2">
+        <h3 className="type-micro text-ink-3">{S.deviceReads.text}</h3>
+        <ListCard className="!px-0">
+          {[S.deviceReadSleep, S.deviceReadHr, S.deviceReadTemp, S.deviceReadSteps].map((r) => (
+            <ListRow key={r.text} label={r.text} />
+          ))}
+        </ListCard>
+        <p className="font-sans text-[13px] text-ink-2">{fmt(S.deviceNoWrite, { name })}</p>
+        {current && !connected ? <p className="font-sans text-[13px] text-ink-2">{fmt(S.deviceOneAtATime, { name, current: deviceName(current) })}</p> : null}
+        {connected ? (
+          <SecondaryButton
+            size="lg"
+            onClick={() => {
+              apply((s) => disconnectDevice(s));
+              toast(fmt(S.toastDeviceDisconnected, { name }));
+              onClose();
+            }}
+          >
+            {S.deviceDisconnect.text}
+          </SecondaryButton>
+        ) : (
+          <PrimaryButton
+            size="lg"
+            tone="ink"
+            onClick={() => {
+              apply((s, at) => connectDevice(s, device!, at));
+              toast(fmt(S.toastDeviceConnected, { name }));
+              onClose();
+            }}
+          >
+            {S.deviceConnect.text}
+          </PrimaryButton>
+        )}
+        <p className="font-sans text-[12px] text-ink-2">{S.deviceMock.text}</p>
+      </div>
+    </BottomSheet>
   );
 }
 
@@ -186,14 +291,18 @@ function SharingSheet({ onClose }: { onClose: () => void }) {
   const sharing = { ...DEFAULT_SETTINGS.sharing, ...state.settings?.sharing };
   const set = (k: keyof typeof sharing, v: boolean) => apply((s) => updateSettings(s, { settings: { sharing: { ...sharing, [k]: v } } }));
   const name = state.her.partnerName;
+  // Only what applies to her now: feeds with a baby, appointments in pregnancy, recovery after a birth.
+  const babyCare = state.children.length > 0 || state.her.phase === 'postpartum';
+  const pregnant = state.her.phase === 'pregnancy';
+  const hadBirth = state.births.length > 0 || state.her.phase === 'postpartum';
   return (
     <BottomSheet open onOpenChange={(o) => !o && onClose()} title={name ? fmt(S.shareTitle, { name }) : S.shareTitleNoName.text}>
       <div className="flex flex-col gap-4 pb-2">
         <h3 className="type-micro text-ink-3">{S.shareWhat.text}</h3>
         <ListCard className="!px-0">
-          <Toggle label={S.shareFeeds.text} checked={sharing.feeds} onChange={(v) => set('feeds', v)} />
-          <Toggle label={S.shareAppointments.text} checked={sharing.appointments} onChange={(v) => set('appointments', v)} />
-          <Toggle label={S.shareMe.text} checked={sharing.me} onChange={(v) => set('me', v)} />
+          {babyCare ? <Toggle label={S.shareFeeds.text} checked={sharing.feeds} onChange={(v) => set('feeds', v)} /> : null}
+          {pregnant ? <Toggle label={S.shareAppointments.text} checked={sharing.appointments} onChange={(v) => set('appointments', v)} /> : null}
+          <Toggle label={hadBirth ? S.shareMe.text : S.shareMeCycle.text} checked={sharing.me} onChange={(v) => set('me', v)} />
         </ListCard>
         <p className="font-sans text-[12px] text-ink-2">{S.shareMeHint.text}</p>
         <PrimaryButton size="lg" tone="ink" disabled>

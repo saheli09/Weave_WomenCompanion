@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { closePanel, expectTapTargets, openPanel, start, timings } from './helpers';
+import { closePanel, expectTapTargets, openPanel, start } from './helpers';
 
 /** Me tab (S03, B18 to B23) and cycle (B24 to B26). */
 
@@ -9,21 +9,24 @@ async function setClock(page: Page, value: string) {
   await closePanel(page);
 }
 
-test('postpartum Me (D3): week card, tiles, body list, her insights only', async ({ page }) => {
+test('postpartum Self care (D3): week card, suggestions for today, body list; logging and insights stay on Today', async ({ page }) => {
   await start(page, 'D3');
   const device = page.locator('#device');
-  await device.getByRole('link', { name: 'Me' }).click();
+  await device.getByRole('link', { name: 'Self care' }).click();
   await expect(device.getByRole('heading', { name: 'Recovering, steadily' })).toBeVisible();
   await expect(device.getByText('Week 3', { exact: true })).toBeVisible();
   await expect(device.getByRole('heading', { name: 'Week 3 Postpartum' })).toBeVisible();
-  await expect(device.getByText('Spotting has eased for three days.')).toBeVisible();
-  await expect(device.getByText(/Feeds are closer together/)).toHaveCount(0); // child insight stays on Today
+  const suggestions = device.getByTestId('self-care-suggestions');
+  await expect(suggestions.locator('[data-suggestion="rest"]')).toContainText('Why: you slept');
+  await suggestions.locator('[data-suggestion="pelvic"]').getByRole('button', { name: 'Log a set' }).click();
+  await expect(page).toHaveURL(/\/me\/pelvic$/);
+  await page.goBack();
   await expect(device.getByRole('button', { name: /Bleeding.*Spotting, 3 days/ })).toBeVisible();
   await expect(device.getByRole('button', { name: /Pelvic floor.*2 of 5 this week/ })).toBeVisible();
   await expect(device.getByText('Has your period come back?')).toHaveCount(0); // week 3: too early
+  await expect(device.getByRole('region', { name: 'Hydration' })).toHaveCount(0); // water and mood are on Today
+  await expect(device.getByText('Spotting has eased for three days.')).toHaveCount(0); // insights are on Today
   await expectTapTargets(page);
-  await device.getByRole('button', { name: 'Ok', exact: true }).click();
-  expect((await timings(page)).at(-1)).toMatchObject({ action: 'mood', taps: 1 });
 });
 
 test('detail screens: hydration, pelvic floor, pain with off-ramp, bleeding history', async ({ page }) => {
@@ -51,7 +54,7 @@ test('PRD Phase 3 acceptance (D4): cycle return end to end', async ({ page }) =>
   await start(page, 'D3');
   const device = page.locator('#device');
   await setClock(page, '2026-09-24T10:00'); // D3 child is now 6 weeks: the card appears
-  await device.getByRole('link', { name: 'Me' }).click();
+  await device.getByRole('link', { name: 'Self care' }).click();
   await expect(device.getByText('Has your period come back?')).toBeVisible();
   await device.getByRole('button', { name: 'Not yet' }).click();
   await expect(device.getByText('Has your period come back?')).toHaveCount(0);
@@ -81,17 +84,46 @@ test('cycle screen (D4): calendar marks period days, day sheet logs flow and sym
   await expectTapTargets(page);
 });
 
-test('cycle estimates (D5): fertile window, ovulation and next period, framed as estimates', async ({ page }) => {
+test('cycle estimates (D5): calendar first, then the period, key dates framed as estimates', async ({ page }) => {
   await start(page, 'D5');
   await page.goto('/me/cycle');
-  const summary = page.locator('#device [data-testid="cycle-summary"]');
-  await expect(summary.getByText('Next period estimate: around 23 September')).toBeVisible();
-  await expect(summary.getByText('Estimated fertile window: 4 to 9 September')).toBeVisible();
-  await expect(summary.getByText('Estimated ovulation: around 9 September')).toBeVisible();
-  await expect(summary.getByText('Your last six cycles ran 27 to 30 days.')).toBeVisible();
-  await expect(summary.getByText(/Not a method of contraception\./)).toBeVisible();
-  await expect(page.locator('#device [data-testid="cycle-legend"]')).toContainText('Ovulation, estimate');
+  const d = page.locator('#device');
+  // The calendar comes before everything else.
+  const order = await d.locator('main [role="grid"], main [data-testid="cycle-summary"]').evaluateAll((els) => els.map((e) => e.getAttribute('role') ?? e.getAttribute('data-testid')));
+  expect(order).toEqual(['grid', 'cycle-summary']);
+  await expect(d.getByTestId('cycle-summary').getByRole('heading', { name: 'Period, day 3' })).toBeVisible();
+  const dates = d.getByTestId('cycle-key-dates');
+  await expect(dates.getByRole('listitem')).toHaveCount(4);
+  await expect(dates).toContainText('Cycle day3of about 29');
+  await expect(dates).toContainText('Fertile window4 to 9 Septemberestimate');
+  await expect(dates).toContainText('Ovulation9 Septemberestimate');
+  await expect(dates).toContainText('Next period23 Septemberestimate');
+  await expect(d.getByText(/Not a method of contraception\./)).toBeVisible();
+  await expect(d.getByTestId('cycle-legend')).toContainText('Ovulation, estimate');
   await expectTapTargets(page);
+});
+
+test('a cycle tracker’s Today (D7) opens on the same countdown; between periods the button is My period started', async ({ page }) => {
+  await start(page, 'D7');
+  const d = page.locator('#device');
+  const first = d.locator('main header + *');
+  await expect(first).toHaveAttribute('data-testid', 'cycle-summary');
+  await expect(first.getByRole('heading', { name: 'In 17 days' })).toBeVisible();
+  await expect(first.getByTestId('estimate-basis')).toHaveText('Based on your last 3 cycles.');
+  await expect(first.getByRole('button', { name: 'Log today' })).toHaveCount(0);
+  await first.getByRole('button', { name: 'My period started' }).click();
+  await expect(first.getByRole('heading', { name: 'Period, Day 1' })).toBeVisible();
+  await first.getByRole('button', { name: 'Log today' }).click();
+  await expect(d.getByRole('dialog')).toBeVisible();
+});
+
+test('between periods (D7): the next period counts down', async ({ page }) => {
+  await start(page, 'D7');
+  await page.goto('/cycle');
+  const summary = page.locator('#device [data-testid="cycle-summary"]');
+  await expect(summary.getByText('Next period', { exact: true })).toBeVisible();
+  await expect(summary.getByRole('heading', { name: 'Next period, In 17 days' })).toBeVisible();
+  await expect(summary.getByText('Around 13 September')).toBeVisible();
 });
 
 test('cycle calendar (D5): past months with estimates, three predicted months ahead, then it stops', async ({ page }) => {
@@ -118,19 +150,21 @@ test('cycle calendar (D5): past months with estimates, three predicted months ah
   await expect(prev).toBeDisabled();
 });
 
-test('coming up (D5): the next three periods with their estimated fertile windows; history shows past ovulation', async ({ page }) => {
+test('cycle analysis (D5): averages, then past cycles as bars, newest first, three until she asks for all', async ({ page }) => {
   await start(page, 'D5');
   await page.goto('/me/cycle');
-  const device = page.locator('#device');
-  for (const [period, fertile] of [
-    ['Period around 23 September', 'Fertile window 3 to 8 October · ovulation around 8 October'],
-    ['Period around 22 October', 'Fertile window 1 to 6 November · ovulation around 6 November'],
-    ['Period around 20 November', 'Fertile window 30 November to 5 December · ovulation around 5 December'],
-  ]) {
-    await expect(device.getByText(period!, { exact: true })).toBeVisible();
-    await expect(device.getByText(fertile!, { exact: true })).toBeVisible();
-  }
-  await expect(device.getByText('Estimated ovulation 11 August', { exact: true })).toBeVisible();
+  const analysis = page.locator('#device [data-testid="cycle-analysis"]');
+  await expect(analysis.getByText('Average period')).toBeVisible();
+  await expect(analysis.getByText('Average cycle')).toBeVisible();
+  await expect(analysis.getByText('Based on your last six cycles, which ran 27 to 30 days.')).toBeVisible();
+  const rows = analysis.getByRole('listitem');
+  await expect(rows).toHaveCount(3);
+  await expect(rows.first()).toHaveAccessibleName(/estimated ovulation 11 August\.$/);
+  await analysis.getByRole('button', { name: 'Show all 6 cycles' }).click();
+  await expect(rows).toHaveCount(6);
+  await analysis.getByRole('button', { name: 'Show fewer' }).click();
+  await expect(rows).toHaveCount(3);
+  await expect(page.locator('#device').getByText('Coming up', { exact: true })).toHaveCount(0); // the calendar shows what is ahead
 });
 
 test('cycle (D4): one period so far, so no estimates and no future months', async ({ page }) => {
@@ -138,7 +172,64 @@ test('cycle (D4): one period so far, so no estimates and no future months', asyn
   await page.goto('/me/cycle');
   const device = page.locator('#device');
   await expect(device.getByText('Too early to estimate. Postpartum cycles are often irregular.')).toBeVisible();
-  await expect(device.getByText(/fertile window/i)).toHaveCount(0);
+  await expect(device.getByTestId('cycle-summary').getByText(/fertile window/i)).toHaveCount(0);
+  await expect(device.getByRole('gridcell', { name: /fertile window/i })).toHaveCount(0);
+  await expect(device.getByTestId('cycle-phases')).toHaveCount(0); // phases need estimates
+  await expect(device.getByTestId('about-ovulation')).toBeVisible(); // the reading does not
   await expect(device.getByTestId('cycle-legend')).toHaveCount(0);
   await expect(device.getByRole('button', { name: 'Next month' })).toBeDisabled();
+});
+
+test('cycle phases and the ovulation explainer (D5): today marked, estimates labelled, not contraception', async ({ page }) => {
+  await start(page, 'D5');
+  await page.goto('/me/cycle');
+  const phases = page.locator('#device [data-testid="cycle-phases"]');
+  await expect(phases.getByRole('heading', { name: 'Today: Period' })).toBeVisible();
+  await expect(page.locator('#device [data-testid="cycle-summary"]').getByRole('img', { name: 'Cycle day 3 of about 29. Period.' })).toBeVisible();
+  const about = page.locator('#device [data-testid="about-ovulation"]');
+  await expect(about.getByText('Can I use this to avoid pregnancy?')).toBeHidden(); // one row until she opens it
+  await about.getByText('About ovulation').click();
+  await expect(about.getByText(/not a method of contraception/)).toBeHidden(); // answers open on tap
+  await about.getByText('Can I use this to avoid pregnancy?').click();
+  await expect(about.getByText(/not a method of contraception/)).toBeVisible();
+  await expectTapTargets(page);
+});
+
+test('first pregnancy (D7): "I’m pregnant", due date from her last period, a celebration, then pregnancy mode', async ({ page }) => {
+  await start(page, 'D7');
+  const d = page.locator('#device');
+  await page.goto('/cycle');
+  const cta = d.getByTestId('pregnant-cta');
+  await expect(cta).toContainText('I’m pregnant');
+  await expect(cta).not.toContainText('again');
+  await cta.click();
+  await expect(d.getByRole('dialog').getByLabel('Due date')).toHaveValue('2027-05-23'); // last period 16 August + 280 days
+  await expect(d.getByText('Worked out from your last period, which started 16 August.', { exact: false })).toBeVisible();
+  await d.getByRole('button', { name: 'Start pregnancy' }).click();
+  const party = d.getByTestId('pregnancy-celebration');
+  await expect(party).toContainText('A new chapter, Saheli');
+  await expect(party).toContainText('Due around 23 May.');
+  await page.clock.runFor(3000);
+  await expect(page).toHaveURL(/\/today$/);
+  await expect(d.locator('[data-today-state="pregnancy"]')).toBeVisible();
+  await expect(d.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Pregnancy' })).toBeVisible();
+});
+
+test('with a child already (D5): "I’m pregnant again"', async ({ page }) => {
+  await start(page, 'D5');
+  await page.goto('/me/cycle');
+  await expect(page.locator('#device').getByTestId('pregnant-cta')).toContainText('I’m pregnant again');
+});
+
+test('a cycle tracker’s Today (D7) carries a note for today: from her own cycles, no buttons, and a why', async ({ page }) => {
+  await start(page, 'D7');
+  const d = page.locator('#device');
+  const note = d.getByRole('button', { name: 'Fertile window runs to 30 August.' });
+  await expect(note).toBeVisible();
+  const card = d.getByRole('article', { name: 'Noticing: Fertile window runs to 30 August.' });
+  await expect(card).toContainText('An estimate, not contraception.');
+  await expect(card.getByRole('button')).toHaveCount(1); // the headline (why); no action buttons
+  await note.click();
+  await expect(d.getByText('Shown once a day while you track your cycle', { exact: false })).toBeVisible();
+  await expect(d.getByText('Cycle lengths')).toBeVisible();
 });
