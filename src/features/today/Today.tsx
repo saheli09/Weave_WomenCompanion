@@ -15,10 +15,11 @@ import { useFeedFlow } from '../feeds/FeedSheets';
 import { EditLogSheet } from '../timeline/EditLogSheet';
 import { HerTiles } from '../me/Me';
 import { BirthPlanSheet, bagValue, checklistOf, HospitalBagSheet, planValue } from '../pregnancy/ChecklistSheets';
-import { CycleCard, DaySheet } from '../cycle/Cycle';
+import { CycleCard, CycleSetupCard, DaySheet, symptomsOn } from '../cycle/Cycle';
 import { FirstFoodPrompts, MealCard } from '../food/Food';
 import { useSleepFlow } from '../sleep/SleepSheet';
 import { PrimaryButton, GhostButton } from '../../components/Button';
+import { FilterChip } from '../../components/Chip';
 import { Chevron } from '../../components/Icon';
 import { format } from 'date-fns';
 import { MoodSheet } from '../quicklog/QuickLogSheet';
@@ -124,18 +125,23 @@ function Compose({ state, now, todayState, insights, onFab }: { state: DomainSta
         </>
       );
     case 'cycle_only':
-    case 'empty':
+    case 'empty': {
+      // First run (decision 2026-10-31): greeting, one setup question, mood, symptoms. Nothing else.
+      const firstRun = !state.her.cycle.periodDays?.length;
       return (
         <>
           <ScreenHeader label={date} title={greeting(now, state.her.name)} />
-          {/* Her period comes first for a cycle tracker: the countdown, or the day of it. */}
-          <CycleCard state={state} now={now} />
-          {carousel}
-          {/* Water and mood as two tiles side by side; her period already leads the page. */}
-          <HerTiles from="today" />
-          <TodaySoFar state={state} now={now} onFab={onFab} />
+          {/* Her period comes first for a cycle tracker: the countdown, or the day of it; before a date, the question. */}
+          {firstRun ? <CycleSetupCard state={state} now={now} /> : <CycleCard state={state} now={now} />}
+          {firstRun ? null : <InsightCarousel {...insights} />}
+          {/* Water lives in Self care, and on period days in the hydration insight. */}
+          <MoodCard state={state} now={now} />
+          <SymptomsRow state={state} now={now} />
+          {/* Only once something is logged today, so the empty state's button never doubles the card's. */}
+          {timelineItems(state, now).length ? <TodaySoFar state={state} now={now} onFab={onFab} /> : null}
         </>
       );
+    }
   }
 }
 
@@ -335,6 +341,42 @@ function WelcomeCard({ state, todayState, onFab }: { state: DomainState; todaySt
         actions={<GhostButton onClick={start}>{label}</GhostButton>}
       />
     </div>
+  );
+}
+
+/** Full-width mood check-in for a cycle tracker's Today: four chips in a row, one tap logs. */
+function MoodCard({ state, now }: { state: DomainState; now: Date }) {
+  const { logMood } = useHerLogs();
+  const mood = latestToday(state, now, 'mood');
+  return (
+    <section aria-labelledby="mood-question" data-testid="mood-card" className="flex flex-col gap-3 rounded-card border border-ink/8 bg-surface p-5 shadow-card">
+      <h2 id="mood-question" className="font-serif text-[20px] leading-tight text-ink">
+        {S.moodQuestion.text}
+      </h2>
+      <div className="grid grid-cols-4 gap-2">
+        {(['low', 'flat', 'ok', 'good'] as const).map((v) => (
+          <FilterChip key={v} selected={mood?.value === v} onClick={() => logMood(v, 'today.her.mood')} className="justify-center !px-2">
+            {cap(v)}
+          </FilterChip>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/** "Symptoms · Add": one line that opens the cycle day detail's symptoms for today. */
+function SymptomsRow({ state, now }: { state: DomainState; now: Date }) {
+  const [open, setOpen] = useState(false);
+  const today = toISODate(now);
+  const logged = symptomsOn(state, today);
+  const value = logged.length ? logged.join(', ') : S.add.text;
+  return (
+    <>
+      <ListCard>
+        <ListRow label={S.cycleSymptoms.text} value={value} chevron onClick={() => setOpen(true)} a11yLabel={t(S.symptomsRowA11y, { value })} />
+      </ListCard>
+      <DaySheet date={open ? today : null} onClose={() => setOpen(false)} symptomsOnly />
+    </>
   );
 }
 

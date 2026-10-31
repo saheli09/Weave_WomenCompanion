@@ -103,12 +103,16 @@ test('cycle estimates (D5): calendar first, then the period, key dates framed as
   await expectTapTargets(page);
 });
 
-test('a cycle tracker’s Today (D7) opens on the same countdown, and Log today opens the day', async ({ page }) => {
+test('a cycle tracker’s Today (D7) opens on the same countdown; between periods the button is My period started', async ({ page }) => {
   await start(page, 'D7');
   const d = page.locator('#device');
   const first = d.locator('main header + *');
   await expect(first).toHaveAttribute('data-testid', 'cycle-summary');
   await expect(first.getByRole('heading', { name: 'In 17 days' })).toBeVisible();
+  await expect(first.getByTestId('estimate-basis')).toHaveText('Based on your last 3 cycles.');
+  await expect(first.getByRole('button', { name: 'Log today' })).toHaveCount(0);
+  await first.getByRole('button', { name: 'My period started' }).click();
+  await expect(first.getByRole('heading', { name: 'Period, Day 1' })).toBeVisible();
   await first.getByRole('button', { name: 'Log today' }).click();
   await expect(d.getByRole('dialog')).toBeVisible();
 });

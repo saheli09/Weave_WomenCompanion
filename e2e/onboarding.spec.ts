@@ -105,11 +105,13 @@ test('tracking my cycle: optional last period, cycle Today', async ({ page }) =>
   await expect(d.getByText('Is your period still going?')).toHaveCount(0); // twelve days ago: counted as finished
   await d.getByRole('button', { name: 'Open Weave' }).click();
   await expect(d.locator('[data-today-state="cycle_only"]')).toBeVisible();
-  await expect(d.getByTestId('welcome-card').getByRole('button', { name: 'Open cycle' })).toBeVisible();
+  // A start twelve days ago: the cycle card, not the first-run question.
+  await expect(d.getByTestId('cycle-summary').getByRole('heading', { name: 'Cycle day 12', exact: true })).toBeVisible();
+  await expect(d.getByTestId('cycle-setup')).toHaveCount(0);
   await expect(d.getByText(/Period, day/)).toHaveCount(0);
 });
 
-test('tracking my cycle with no period given: Today has no empty cycle card, only the welcome', async ({ page }) => {
+test('tracking my cycle with no period given: Today asks when it started, with no cycle numbers', async ({ page }) => {
   await freshInstall(page);
   const d = page.locator('#device');
   await d.getByRole('button', { name: 'Continue without an account' }).click();
@@ -118,7 +120,8 @@ test('tracking my cycle with no period given: Today has no empty cycle card, onl
   await d.getByLabel('Your name').fill('Asha');
   await d.getByRole('button', { name: 'Open Weave' }).click();
   await expect(d.locator('[data-today-state="cycle_only"]')).toBeVisible();
-  await expect(d.getByTestId('welcome-card').getByRole('button', { name: 'Open cycle' })).toBeVisible();
+  await expect(d.getByTestId('cycle-setup').getByRole('heading', { name: 'When did your last period start?' })).toBeVisible();
+  await expect(d.getByTestId('welcome-card')).toHaveCount(0);
   await expect(d.getByText('No period right now')).toHaveCount(0);
 });
 

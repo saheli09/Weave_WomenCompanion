@@ -107,12 +107,9 @@ test('cycle tracker adds a child in Settings: Baby replaces Cycle and opens on t
 test('cycle tracker with no baby: nothing about postpartum or breastfeeding; the period card leads Today', async ({ page }) => {
   await freshCycleTracker(page);
   const d = page.locator('#device');
-  const tooEarly = d.getByText('Too early to estimate. Weave estimates your next period once two cycles are logged.');
-  await expect(tooEarly).toHaveCount(0); // the welcome card above already says it
-  await d.getByTestId('welcome-card').getByRole('button', { name: 'Open cycle' }).click();
-  await page.goto('/today');
+  // One cycle logged: a rough estimate, framed as one; no welcome card above it.
   await expect(d.getByTestId('welcome-card')).toHaveCount(0);
-  await expect(tooEarly).toBeVisible();
+  await expect(d.getByTestId('cycle-summary').getByTestId('estimate-basis')).toContainText('Rough estimate, based on a 28-day cycle.');
   await expect(d.getByText(/postpartum/i)).toHaveCount(0);
   await nav(page).getByRole('link', { name: 'Cycle' }).click();
   await expect(page).toHaveURL(/\/cycle$/);

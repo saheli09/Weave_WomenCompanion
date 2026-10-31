@@ -8,8 +8,10 @@ import { copy, type CopyEntry, type Review } from './copy';
 
 export const birthPrepReview: Review = { kind: 'clinical', ref: '9.5', note: 'Hospital bag list and birth plan choices' };
 
+export type BagGroupId = 'you' | 'baby' | 'papers';
+
 export interface BagGroup {
-  id: string;
+  id: BagGroupId;
   label: CopyEntry;
   items: { id: string; label: CopyEntry }[];
 }

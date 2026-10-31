@@ -81,17 +81,19 @@ test('water from a suggestion logs a glass with Undo', async ({ page }) => {
   await expect(d.getByText('Glass of water logged. 1 of 8 today.')).toBeVisible();
 });
 
-test('water overdue lights up the Hydration tile instead of a repeat insight card', async ({ page }) => {
+test('cycle tracker: water is not on Today; Self care’s Hydration row shows when water is overdue', async ({ page }) => {
   await start(page, 'D7'); // glasses at 8:00 and 9:45; now 10:30
   const d = page.locator('#device');
-  const tile = d.getByRole('region', { name: 'Hydration' });
-  await expect(tile).not.toHaveAttribute('data-nudge');
-  await page.clock.fastForward('02:15:00'); // 12:45, three hours since the last glass
-  await expect(tile).toHaveAttribute('data-nudge', 'water');
-  await expect(tile.getByTestId('water-nudge')).toHaveText('Last glass 3h ago');
+  await expect(d.getByRole('region', { name: 'Hydration' })).toHaveCount(0);
   await expect(d.getByText(/glasses so far today/)).toHaveCount(0); // the old R02 card is gone
-  await tile.getByRole('button', { name: /^Add a glass of water/ }).click();
-  await expect(tile).not.toHaveAttribute('data-nudge');
+  await page.goto('/me');
+  const row = d.getByRole('button', { name: /^Hydration/ });
+  await expect(row).toContainText('2 of 8 glasses');
+  await expect(row).not.toContainText('Last glass');
+  await page.clock.fastForward('02:15:00'); // 12:45, three hours since the last glass
+  await expect(row).toContainText('Last glass 3h ago');
+  await row.click();
+  await expect(page).toHaveURL(/\/me\/hydration$/);
 });
 
 test('postpartum Today: no water yet rings the Me card', async ({ page }) => {

@@ -99,6 +99,7 @@ export function MeScreen() {
     .filter((l): l is Extract<LogEntry, { type: 'sleep' }> => l.type === 'sleep' && Boolean(l.end) && isSameDay(parseDate(l.end!), now) && parseDate(l.end!) <= now)
     .sort((a, b) => (a.at < b.at ? 1 : -1))[0];
   const vitals = vitalsOn(state, toISODate(now));
+  const nudge = waterNudge(state, now);
 
   return (
     <div className="flex flex-col gap-5" data-screen="me" data-variant={her.phase}>
@@ -133,6 +134,16 @@ export function MeScreen() {
               <ListRow size="lg" dot="grey" label={S.meWeight.text} value={weight && weight.type === 'weight' ? t(S.lastLogged, { value: `${weight.kg.toFixed(1)} kg`, ago: formatTimeSince(weight.at, now).toLowerCase() }) : S.noneLogged.text} />
             </>
           ) : null}
+          {/* Water for everyone here; a cycle tracker's Today no longer has the tile (decision 2026-10-31). */}
+          <ListRow
+            size="lg"
+            dot={nudge ? 'coral' : 'grey'}
+            label={S.hydration.text}
+            sublabel={nudge ? (nudge.kind === 'none-yet' ? S.waterNudgeNone.text : t(S.waterNudgeSince, { n: nudge.hours })) : undefined}
+            value={t(S.glassesOfGoalToday, { count: waterToday(state, now), goal: her.hydrationGoalGlasses })}
+            chevron
+            onClick={() => navigate('/me/hydration')}
+          />
           <ListRow size="lg" dot="grey" label={S.pain.text} value={pain ? t(S.bodyPain, { location: pain.location, intensity: pain.intensity }) : S.noneLogged.text} chevron onClick={() => navigate('/me/pain')} />
           <ListRow
             size="lg"

@@ -13,6 +13,7 @@ import { useWeave } from '../../state/store';
 import { now as clockNow } from '../../state/clock';
 import { useToast } from '../../app/Toast';
 import { SituationGlyph, StageThreads, ThreadProgress } from './Threads';
+import { ONGOING_MAX_DAYS } from '../../domain/cycle';
 
 /**
  * Onboarding (B01, 9.13). A fresh install opens here. Three screens for every
@@ -135,7 +136,7 @@ export function Onboarding() {
   const pregnancyLine = pregnant && dueInRange ? fmt(S.onbPregnancyLine, { week: gestation!.week, date: formatDayMonth(dueISO) }) : undefined;
   const cycleDay = kind === 'tracking_cycle' && lastPeriod && !periodFuture ? calendarDaysBetween(lastPeriod, now) + 1 : undefined;
   // Only a period that began in the last week might still be going; older ones count as finished.
-  const askOngoing = Boolean(cycleDay && cycleDay <= 7);
+  const askOngoing = Boolean(cycleDay && cycleDay <= ONGOING_MAX_DAYS);
 
   return (
     <div className="flex min-h-full flex-1 flex-col justify-between gap-8" data-screen="onboarding" data-step={step}>

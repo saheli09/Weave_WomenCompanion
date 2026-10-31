@@ -16,7 +16,7 @@ import { ReviewFlag } from '../../components/ReviewFlag';
 import type { CopyEntry } from '../../content/copy';
 import { addDaysISO, calendarDaysBetween, formatDayMonth, formatLongDate, numberWord, PREGNANCY_DAYS, pregnancyWeek, toISODate } from '../../domain/dates';
 import { currentPeriodDay } from '../../domain/stage';
-import { cycleDay, cycleDayNumber, cyclePhases, type CycleEstimate, type CycleTimeline, type PhaseKey, cycleLengths, cycleTimeline, endPeriod, logPeriodDay, nextPeriodEstimate, periodRuns, periodStarts, PREDICT_MONTHS, removePeriodDay } from '../../domain/cycle';
+import { cycleDay, cycleDayNumber, cyclePhases, type CycleEstimate, type CycleTimeline, type PhaseKey, cycleLengths, cycleTimeline, cycleStartUnknown, endPeriod, logPeriodDay, nextPeriod, nextPeriodEstimate, setDaySymptoms, setUsualCycleLength, startCycleFrom, TYPICAL_CYCLE_DAYS, USUAL_LENGTH_MAX, USUAL_LENGTH_MIN, periodRuns, periodStarts, PREDICT_MONTHS, removePeriodDay } from '../../domain/cycle';
 import { pregnantAgain } from '../../domain/transitions';
 import type { BleedingLevel, DomainState, LogEntry } from '../../domain/types';
 import { useDomain, useWeave } from '../../state/store';
@@ -367,31 +367,43 @@ function Legend() {
   );
 }
 
-export function DaySheet({ date, onClose }: { date: string | null; onClose: () => void }) {
+/**
+ * One day's detail: flow and symptoms. `symptomsOnly` (Today's Symptoms row,
+ * decision 2026-10-31) shows just the symptoms, and saving them does not mark
+ * the day as a period day.
+ */
+export function DaySheet({ date, onClose, symptomsOnly = false }: { date: string | null; onClose: () => void; symptomsOnly?: boolean }) {
   const state = useDomain();
   const apply = useWeave((s) => s.apply);
   const toast = useToast();
   const existing = date ? periodLogFor(state, date) : undefined;
   const isPeriod = date ? (state.her.cycle.periodDays ?? []).includes(date) : false;
+  const offered = S.cycleSymptomList.text.split('|');
   const [flow, setFlow] = useState<BleedingLevel>('medium');
   const [symptoms, setSymptoms] = useState<string[]>([]);
   useEffect(() => {
     if (!date) return;
     setFlow(existing?.flow ?? 'medium');
-    setSymptoms(existing?.symptoms ?? []);
+    setSymptoms(existing ? (existing.symptoms ?? []) : symptomsOnly ? symptomsOn(state, date).filter((x) => offered.includes(x)) : []);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date]);
   const save = () => {
     if (!date) return;
-    apply((s, at) => logPeriodDay(s, date, flow, symptoms, at));
-    commitLog('period', 'cycle');
-    toast(S.toastPeriodDay.text);
+    if (symptomsOnly) {
+      apply((s, at) => setDaySymptoms(s, date, symptoms, offered, at));
+      commitLog('symptom', 'today.her.symptoms');
+      toast(S.toastSymptoms.text);
+    } else {
+      apply((s, at) => logPeriodDay(s, date, flow, symptoms, at));
+      commitLog('period', 'cycle');
+      toast(S.toastPeriodDay.text);
+    }
     onClose();
   };
   return (
-    <BottomSheet open={Boolean(date)} onOpenChange={(o) => !o && onClose()} title={date ? formatLongDate(date) : ''} onSave={save}>
+    <BottomSheet open={Boolean(date)} onOpenChange={(o) => !o && onClose()} title={symptomsOnly ? S.cycleSymptoms.text : date ? formatLongDate(date) : ''} onSave={save}>
       <div className="flex flex-col gap-5 pb-2">
-        <fieldset className="flex flex-col gap-2">
+        {symptomsOnly ? null : <fieldset className="flex flex-col gap-2">
           <legend className="mb-2 font-sans text-[13px] font-semibold text-ink">{S.cycleFlow.text}</legend>
           <div role="radiogroup" className="grid grid-cols-2 gap-2">
             {FLOWS.map((f) => (
@@ -400,18 +412,18 @@ export function DaySheet({ date, onClose }: { date: string | null; onClose: () =
               </FilterChip>
             ))}
           </div>
-        </fieldset>
+        </fieldset>}
         <fieldset className="flex flex-col gap-2">
-          <legend className="mb-2 font-sans text-[13px] font-semibold text-ink">{S.cycleSymptoms.text}</legend>
+          <legend className={symptomsOnly ? 'sr-only' : 'mb-2 font-sans text-[13px] font-semibold text-ink'}>{S.cycleSymptoms.text}</legend>
           <div className="flex flex-wrap gap-2">
-            {S.cycleSymptomList.text.split('|').map((x) => (
+            {offered.map((x) => (
               <FilterChip key={x} selected={symptoms.includes(x)} onClick={() => setSymptoms((xs) => (xs.includes(x) ? xs.filter((y) => y !== x) : [...xs, x]))}>
                 {x}
               </FilterChip>
             ))}
           </div>
         </fieldset>
-        {isPeriod && date ? (
+        {isPeriod && date && !symptomsOnly ? (
           <TextAction className="self-start !px-0 text-terracotta-ink" onClick={() => (apply((s) => removePeriodDay(s, date)), onClose())}>
             {S.cycleRemoveDay.text}
           </TextAction>
@@ -419,6 +431,13 @@ export function DaySheet({ date, onClose }: { date: string | null; onClose: () =
       </div>
     </BottomSheet>
   );
+}
+
+/** Names of her symptom logs on a day (period days carry theirs on the period log). */
+export function symptomsOn(state: DomainState, date: string): string[] {
+  const period = periodLogFor(state, date);
+  if (period) return period.symptoms ?? [];
+  return state.logs.flatMap((l) => (l.type === 'symptom' && l.subject.kind === 'her' && toISODate(new Date(l.at)) === date ? [l.name] : []));
 }
 
 /** "I'm pregnant again" (6.2, P2): cycle tracking pauses; children stay. */
@@ -550,14 +569,81 @@ const hasBaby = (state: DomainState) => state.children.length > 0 || state.her.p
 /** Today, cycle-only state (B26): the cycle card. */
 export function CycleCard({ state, now }: { state: DomainState; now: Date }) {
   const [day, setDay] = useState<string | null>(null);
-  // Nothing logged yet: nothing to say, and the welcome card already points to the Cycle tab.
+  // Nothing logged yet: Today shows the setup card instead.
   if (!state.her.cycle.active || !state.her.cycle.periodDays?.length) return null;
   return (
     <>
-      {/* The one-time welcome card already says estimates come after a cycle or two. */}
-      <PeriodSummary state={state} now={now} onLog={() => setDay(toISODate(now))} quiet={Boolean(state.prompts.welcome)} />
+      <PeriodSummary state={state} now={now} onLog={() => setDay(toISODate(now))} />
       <DaySheet date={day} onClose={() => setDay(null)} />
     </>
+  );
+}
+
+/**
+ * First-run Today for a cycle tracker (decision 2026-10-31): one question in
+ * place of the cycle card and the welcome. One tap on a chip saves the start
+ * (with Undo) and the card becomes the cycle card. "I don’t remember" keeps the
+ * card, saying her cycle starts when she logs her first period. No filled button.
+ */
+export function CycleSetupCard({ state, now }: { state: DomainState; now: Date }) {
+  const apply = useWeave((s) => s.apply);
+  const toast = useToast();
+  const [picking, setPicking] = useState(false);
+  const [picked, setPicked] = useState('');
+  const today = toISODate(now);
+  const unknown = Boolean(state.her.cycle.startUnknown);
+  const save = (date: string) => {
+    const before = state.her.cycle;
+    apply((s, at) => startCycleFrom(s, date, at));
+    commitLog('period', 'today.cycle.setup');
+    toast(S.toastPeriodStart.text, () =>
+      apply((s) => {
+        const r = removePeriodDay(s, date);
+        return { ...r, her: { ...r.her, cycle: before } };
+      }),
+    );
+  };
+  const title = unknown ? S.cycleUnknownTitle.text : S.cycleSetupTitle.text;
+  return (
+    <section data-testid="cycle-setup" aria-labelledby="cycle-setup-title" className="flex flex-col gap-4 rounded-card border border-ink/8 bg-surface p-5 shadow-card">
+      <div className="flex flex-col gap-1.5">
+        {unknown ? <span className="type-micro text-ink-2">{S.cycleYour.text}</span> : null}
+        <h2 id="cycle-setup-title" className="font-serif text-[24px] leading-[1.2] text-ink">
+          {title}
+        </h2>
+        {unknown ? null : <p className="font-sans text-[13px] leading-snug text-ink-2">{S.cycleSetupBody.text}</p>}
+      </div>
+      <div role="group" aria-label={title} className="flex flex-wrap gap-2">
+        <FilterChip selected={false} aria-pressed={undefined} onClick={() => save(today)}>
+          {S.cycleSetupToday.text}
+        </FilterChip>
+        <FilterChip selected={false} aria-pressed={undefined} onClick={() => save(addDaysISO(today, -1))}>
+          {S.cycleSetupYesterday.text}
+        </FilterChip>
+        <FilterChip selected={false} aria-pressed={undefined} aria-haspopup="dialog" onClick={() => (setPicked(''), setPicking(true))}>
+          {S.cycleSetupPick.text}
+        </FilterChip>
+      </div>
+      {unknown ? null : (
+        <TextAction className="-my-2 self-start !px-0 text-[13px] underline underline-offset-2" onClick={() => apply((s) => cycleStartUnknown(s))}>
+          {S.cycleSetupUnknown.text}
+        </TextAction>
+      )}
+      <BottomSheet
+        open={picking}
+        onOpenChange={setPicking}
+        title={S.cycleSetupSheet.text}
+        onSave={() => (picked && picked <= today ? (save(picked), setPicking(false)) : undefined)}
+        saveDisabled={!picked || picked > today}
+        dirty={Boolean(picked)}
+      >
+        <div className="flex flex-col gap-5 pb-2">
+          <Field label={S.cycleSetupDate.text}>
+            <input type="date" className={fieldCls} max={today} min={addDaysISO(today, -365)} value={picked} onChange={(e) => setPicked(e.target.value)} />
+          </Field>
+        </div>
+      </BottomSheet>
+    </section>
   );
 }
 
@@ -571,28 +657,58 @@ export function CycleCard({ state, now }: { state: DomainState; now: Date }) {
 export function PeriodSummary({ state, now, onLog, quiet = false }: { state: DomainState; now: Date; onLog: () => void; quiet?: boolean }) {
   const apply = useWeave((s) => s.apply);
   const toast = useToast();
+  const [lengthOpen, setLengthOpen] = useState(false);
   const days = state.her.cycle.periodDays ?? [];
+  const today = toISODate(now);
   const periodDay = currentPeriodDay(state, now);
-  const estimate = nextPeriodEstimate(days);
   const dayN = cycleDayNumber(days, now);
   const phases = cyclePhases(cycleTimeline(days, now), now);
   const phase = phases ? PHASE[phases.today] : undefined;
+  // From her cycles once two are logged; before that, a cycle tracker without a baby gets a rough one from her usual length (decision 2026-10-31).
+  const next = nextPeriod(state, now, !hasBaby(state));
+  const history = next?.basis === 'history';
+  const about = next
+    ? next.days > 1
+      ? t(S.cycleNextInAbout, { n: next.days, date: formatDayMonth(next.date) })
+      : t(next.days === 1 ? S.cycleNextTomorrowAbout : S.cycleNextTodayAbout, { date: formatDayMonth(next.date) })
+    : undefined;
   const [label, title, sub] = periodDay
-    ? [S.phasePeriod.text, t(S.cyclePeriodDayShort, { n: periodDay }), estimate ? t(S.cycleNextAfter, { date: formatDayMonth(estimate) }) : undefined]
-    : estimate
-      ? [S.cycleNextLabel.text, nextIn(estimate, toISODate(now)), t(S.cycleNextAround, { date: formatDayMonth(estimate) })]
-      : [S.cycleCardDay.text, S.cycleNoPeriod.text, dayN ? t(S.cycleDayN, { n: dayN }) : undefined];
+    ? [S.phasePeriod.text, t(S.cyclePeriodDayShort, { n: periodDay }), history ? t(S.cycleNextAfter, { date: formatDayMonth(next!.date) }) : about]
+    : history
+      ? [S.cycleNextLabel.text, nextIn(next!.date, today), t(S.cycleNextAround, { date: formatDayMonth(next!.date) })]
+      : hasBaby(state) || !dayN
+        ? [S.cycleCardDay.text, S.cycleNoPeriod.text, dayN ? t(S.cycleDayN, { n: dayN }) : undefined]
+        : [undefined, t(S.cycleDayN, { n: dayN }), about];
+  const started = () => {
+    apply((s, at) => startCycleFrom(s, today, at));
+    commitLog('period', 'cycle.started');
+    toast(S.toastPeriodStarted.text, () => apply((s) => removePeriodDay(s, today)));
+  };
   return (
     <section data-testid="cycle-summary" className={`flex flex-col gap-4 rounded-card bg-linear-to-br ${phase?.tint ?? 'from-surface'} to-surface to-70% bg-surface p-5 shadow-card`}>
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 flex-col gap-1">
-          <span aria-hidden className="type-micro text-ink-2">{label}</span>
+          {label ? <span aria-hidden className="type-micro text-ink-2">{label}</span> : null}
           {/* The label joins the heading for screen readers: "Period, Day 3", "Next period, In 17 days". */}
           <h2 className="font-serif text-[34px] leading-[1.1] text-ink">
-            <span className="sr-only">{label}, </span>
+            {label ? <span className="sr-only">{label}, </span> : null}
             {title}
           </h2>
-          {sub ? <p className="font-sans text-[13px] text-ink-2">{sub}</p> : null}
+          {sub ? <p className="font-sans text-[15px] leading-snug text-ink">{sub}</p> : null}
+          {next ? (
+            <p data-testid="estimate-basis" className="font-sans text-[13px] leading-snug text-ink-2">
+              {history ? (
+                t(S.cycleBasedOnLast, { n: next.cycles })
+              ) : (
+                <>
+                  <Copy entry={S.cycleRoughBasis} params={{ n: next.length }} />{' '}
+                  <button type="button" onClick={() => setLengthOpen(true)} aria-label={t(S.cycleChangeA11y, { n: next.length })} className="hit-44 font-semibold text-ink underline underline-offset-2">
+                    {S.cycleChange.text}
+                  </button>
+                </>
+              )}
+            </p>
+          ) : null}
         </div>
         {phases ? <PhaseRing phases={phases} showDay={!periodDay} /> : null}
       </div>
@@ -603,18 +719,56 @@ export function PeriodSummary({ state, now, onLog, quiet = false }: { state: Dom
             <p className="font-sans text-[13px] leading-snug text-ink-2">{phase.line.text}</p>
           </div>
         </ReviewFlag>
-      ) : !estimate && !quiet ? (
-        <Copy as="p" entry={hasBaby(state) ? S.cycleTooEarly : S.cycleTooEarlyNoBaby} className="type-body text-ink-2" />
+      ) : !next && !quiet ? (
+        <Copy as="p" entry={hasBaby(state) ? S.cycleTooEarly : S.cycleEstimatesImprove} className="type-body text-ink-2" />
       ) : null}
       <div className="flex flex-wrap items-center gap-3">
-        <PrimaryButton tone="ink" onClick={onLog}>
-          {S.cycleLogToday.text}
-        </PrimaryButton>
         {periodDay ? (
-          <TextAction onClick={() => (apply((s, at) => endPeriod(s, at)), toast(S.toastPeriodEnded.text))}>{S.cycleEndPeriod.text}</TextAction>
-        ) : null}
+          <>
+            <PrimaryButton tone="ink" onClick={onLog}>
+              {S.cycleLogToday.text}
+            </PrimaryButton>
+            <TextAction onClick={() => (apply((s, at) => endPeriod(s, at)), toast(S.toastPeriodEnded.text))}>{S.cycleEndPeriod.text}</TextAction>
+          </>
+        ) : (
+          <PrimaryButton tone="ink" onClick={started}>
+            {S.cyclePeriodStarted.text}
+          </PrimaryButton>
+        )}
       </div>
+      <CycleLengthSheet open={lengthOpen} onOpenChange={setLengthOpen} current={state.her.cycle.usualLength ?? TYPICAL_CYCLE_DAYS} />
     </section>
+  );
+}
+
+/** Her usual cycle length, 21 to 45 days, for the rough estimate before two cycles are logged. */
+function CycleLengthSheet({ open, onOpenChange, current }: { open: boolean; onOpenChange: (o: boolean) => void; current: number }) {
+  const apply = useWeave((s) => s.apply);
+  const [n, setN] = useState(current);
+  useEffect(() => {
+    if (open) setN(current);
+  }, [open, current]);
+  const step = 'grid size-12 place-items-center rounded-full border border-line font-sans text-[22px] text-ink disabled:opacity-30';
+  return (
+    <BottomSheet open={open} onOpenChange={onOpenChange} title={S.cycleLengthSheet.text} onSave={() => (apply((s) => setUsualCycleLength(s, n)), onOpenChange(false))} dirty={n !== current}>
+      <div className="flex flex-col gap-4 pb-2">
+        <p id="cycle-length-label" className="font-sans text-[13px] font-semibold text-ink">
+          {S.cycleLengthLabel.text}
+        </p>
+        <div role="group" aria-labelledby="cycle-length-label" className="flex items-center justify-between gap-4 rounded-card bg-surface-muted px-4 py-3">
+          <button type="button" aria-label={S.cycleLengthShorter.text} disabled={n <= USUAL_LENGTH_MIN} onClick={() => setN((x) => x - 1)} className={step}>
+            −
+          </button>
+          <output data-testid="cycle-length" aria-live="polite" className="font-serif text-[34px] text-ink">
+            {t(S.cycleLengthDays, { n })}
+          </output>
+          <button type="button" aria-label={S.cycleLengthLonger.text} disabled={n >= USUAL_LENGTH_MAX} onClick={() => setN((x) => x + 1)} className={step}>
+            +
+          </button>
+        </div>
+        <p className="font-sans text-[13px] text-ink-2">{S.cycleLengthHint.text}</p>
+      </div>
+    </BottomSheet>
   );
 }
 

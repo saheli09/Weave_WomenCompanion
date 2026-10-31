@@ -7,11 +7,13 @@ import { FilterChip } from '../../components/Chip';
 import { Field, fieldCls } from '../../components/Form';
 import { PrimaryButton, TextAction } from '../../components/Button';
 import { ReviewFlag } from '../../components/ReviewFlag';
-import { AFTER_BIRTH, BAG_ITEM_IDS, birthPrepReview, FEEDING, HOSPITAL_BAG, PAIN_RELIEF } from '../../content/birthPrep';
+import { Icon } from '../../components/Icon';
+import { AFTER_BIRTH, birthPrepReview, FEEDING, PAIN_RELIEF } from '../../content/birthPrep';
 import { setChecklist } from '../../domain/transitions';
 import type { BirthPlan, DomainState } from '../../domain/types';
 import { useDomain, useWeave } from '../../state/store';
 import { useToast } from '../../app/Toast';
+import { addBagItem, bagIds, bagList, type Checklist, packedItems, removeBagItem, restoreBagItems, toggleBagItem } from './hospitalBag';
 
 /**
  * The This week checklist's two sheets (9.5, decision 2026-10-30): a hospital
@@ -19,22 +21,18 @@ import { useToast } from '../../app/Toast';
  * where each stands and open these.
  */
 
-type Checklist = NonNullable<NonNullable<DomainState['her']['pregnancy']>['checklist']>;
 const EMPTY: Checklist = { birthPlanShared: false, hospitalBag: 'not_started' };
 
 export const checklistOf = (state: DomainState): Checklist => state.her.pregnancy?.checklist ?? EMPTY;
+export { packedItems };
 
-/** Packed item ids. A checklist saved before items existed counts as all or none. */
-export function packedItems(c: Checklist): string[] {
-  return c.bagItems ?? (c.hospitalBag === 'packed' ? BAG_ITEM_IDS : []);
-}
-
-/** "Not started", "5 of 16 packed" or "Packed". */
+/** "Not started", "5 of 16 packed" or "Packed", counted on her own list. */
 export function bagValue(c: Checklist): string {
   const n = packedItems(c).length;
+  const total = bagIds(c).length;
   if (!n) return S.notStarted.text;
-  if (n >= BAG_ITEM_IDS.length) return S.packed.text;
-  return t(S.bagProgress, { n, total: BAG_ITEM_IDS.length });
+  if (n >= total) return S.packed.text;
+  return t(S.bagProgress, { n, total });
 }
 
 /** Where, who, pain relief and feeding answered: Ready. Some: Started. Notes are optional. */
@@ -52,34 +50,104 @@ export function planValue(c: Checklist, partner?: string): string {
 export function HospitalBagSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   const state = useDomain();
   const apply = useWeave((s) => s.apply);
-  const packed = packedItems(checklistOf(state));
-  const toggle = (id: string) => {
-    const next = packed.includes(id) ? packed.filter((x) => x !== id) : [...packed, id];
-    apply((s) => setChecklist(s, { bagItems: next, hospitalBag: next.length >= BAG_ITEM_IDS.length ? 'packed' : 'not_started' }));
-  };
+  const c = checklistOf(state);
+  const groups = bagList(c);
+  const packed = packedItems(c);
+  const [editing, setEditing] = useState(false);
+  useEffect(() => {
+    if (!open) setEditing(false);
+  }, [open]);
+  const change = (patch: (c: Checklist) => Partial<Checklist> | undefined) =>
+    apply((s) => {
+      const p = patch(checklistOf(s));
+      return p ? setChecklist(s, p) : s;
+    });
   return (
     <BottomSheet open={open} onOpenChange={onOpenChange} title={S.hospitalBag.text}>
       <div className="flex flex-col gap-5 pb-2">
-        <p data-testid="bag-progress" className="type-micro text-ink-2">
-          {t(S.bagProgress, { n: packed.length, total: BAG_ITEM_IDS.length })}
-        </p>
+        <div className="flex items-center justify-between gap-3">
+          <p data-testid="bag-progress" className="type-micro text-ink-2">
+            {t(S.bagProgress, { n: packed.length, total: bagIds(c).length })}
+          </p>
+          <TextAction className="!px-0 text-[13px] font-semibold text-sage-600" aria-pressed={editing} onClick={() => setEditing((e) => !e)}>
+            {editing ? S.bagDone.text : S.bagEdit.text}
+          </TextAction>
+        </div>
         <ReviewFlag review={birthPrepReview} className="rounded-card">
           <div className="flex flex-col gap-5">
-            {HOSPITAL_BAG.map((g) => (
+            {groups.map((g) => (
               <fieldset key={g.id} className="flex flex-col">
-                <legend className="mb-1 font-sans text-[13px] font-semibold text-ink">{g.label.text}</legend>
-                {g.items.map((it) => (
-                  <label key={it.id} className="flex min-h-[48px] items-center gap-3 border-b border-line last:border-b-0">
-                    <input type="checkbox" checked={packed.includes(it.id)} onChange={() => toggle(it.id)} className="size-5 shrink-0 accent-[var(--color-sage-600)]" />
-                    <span className={`type-row ${packed.includes(it.id) ? 'text-ink-3 line-through' : 'text-ink'}`}>{it.label.text}</span>
-                  </label>
-                ))}
+                <legend className="mb-1 font-sans text-[13px] font-semibold text-ink">{g.label}</legend>
+                {g.items.map((it) =>
+                  editing ? (
+                    <div key={it.id} className="flex min-h-[48px] items-center justify-between gap-3 border-b border-line">
+                      <span className="type-row text-ink">{it.label}</span>
+                      <button
+                        type="button"
+                        aria-label={t(S.bagRemove, { item: it.label })}
+                        onClick={() => change((c) => removeBagItem(c, it.id))}
+                        className="flex size-11 shrink-0 items-center justify-center rounded-full active:bg-line/60"
+                      >
+                        <Icon name="close" size={14} color="var(--color-ink-2)" />
+                      </button>
+                    </div>
+                  ) : (
+                    <label key={it.id} className="flex min-h-[48px] items-center gap-3 border-b border-line">
+                      <input type="checkbox" checked={packed.includes(it.id)} onChange={() => change((c) => toggleBagItem(c, it.id))} className="size-5 shrink-0 accent-[var(--color-sage-600)]" />
+                      <span className={`type-row ${packed.includes(it.id) ? 'text-ink-3 line-through' : 'text-ink'}`}>{it.label}</span>
+                    </label>
+                  ),
+                )}
+                <AddBagItem group={g.label} onAdd={(text) => change((c) => addBagItem(c, g.id, text, `custom-${Date.now().toString(36)}-${c.bagCustom?.length ?? 0}`))} />
               </fieldset>
             ))}
           </div>
         </ReviewFlag>
+        {editing && c.bagRemoved?.length ? (
+          <TextAction className="self-start !px-0 text-[13px]" onClick={() => change(restoreBagItems)}>
+            {S.bagRestore.text}
+          </TextAction>
+        ) : null}
       </div>
     </BottomSheet>
+  );
+}
+
+/** "Add an item" at the foot of a group; opens a field that stays open for the next one. */
+function AddBagItem({ group, onAdd }: { group: string; onAdd: (text: string) => void }) {
+  const [adding, setAdding] = useState(false);
+  const [text, setText] = useState('');
+  if (!adding) {
+    return (
+      <TextAction className="self-start !px-0 text-[14px] text-sage-600" aria-label={t(S.bagAddTo, { group })} onClick={() => setAdding(true)}>
+        + {S.bagAdd.text}
+      </TextAction>
+    );
+  }
+  const submit = () => {
+    if (text.trim()) onAdd(text);
+    setText('');
+  };
+  return (
+    <form
+      className="flex items-center gap-2 pt-2"
+      onSubmit={(e) => {
+        e.preventDefault();
+        submit();
+      }}
+    >
+      <input
+        autoFocus
+        aria-label={t(S.bagNewItem, { group })}
+        className={`${fieldCls} flex-1`}
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={() => !text.trim() && setAdding(false)}
+      />
+      <PrimaryButton type="submit" tone="sage" disabled={!text.trim()}>
+        {S.bagAddButton.text}
+      </PrimaryButton>
+    </form>
   );
 }
 

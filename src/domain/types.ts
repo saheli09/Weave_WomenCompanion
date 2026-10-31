@@ -21,7 +21,15 @@ export interface HerProfile {
   phase: HerPhase;
   pregnancy?: Pregnancy; // exists while pregnant
   postpartum?: { birthId: string; startedAt: ISODateTime };
-  cycle: { active: boolean; lastPeriodStart?: ISODate; periodDays?: ISODate[] };
+  cycle: {
+    active: boolean;
+    lastPeriodStart?: ISODate;
+    periodDays?: ISODate[];
+    /** PRD-ADDITION (decision 2026-10-31): she told first-run Today she does not remember her last period. */
+    startUnknown?: boolean;
+    /** PRD-ADDITION (decision 2026-10-31): her usual cycle length in days, for the rough estimate before two cycles. Absent: 28. */
+    usualLength?: number;
+  };
   hydrationGoalGlasses: number; // default 8
   units: { volume: 'oz' | 'ml'; weight: 'kg' | 'lb' };
   /** PRD-ADDITION (9.6, 11.3, S09 "Doctor · call"): every escalation offers a human to contact. */
@@ -46,9 +54,19 @@ export interface Pregnancy {
     hospitalBag: 'not_started' | 'packed';
     /** PRD-ADDITION (decision 2026-10-30): which hospital bag items she has packed. Absent: all or none, from hospitalBag. */
     bagItems?: string[];
+    /** PRD-ADDITION (decision 2026-10-31): items she added to the hospital bag list, in her words. */
+    bagCustom?: BagCustomItem[];
+    /** PRD-ADDITION (decision 2026-10-31): suggested hospital bag items she took off her list. */
+    bagRemoved?: string[];
     /** PRD-ADDITION (decision 2026-10-30): her birth plan. Choices are stored as she saw them. */
     birthPlan?: BirthPlan;
   };
+}
+
+export interface BagCustomItem {
+  id: string;
+  group: 'you' | 'baby' | 'papers';
+  label: string;
 }
 
 export interface BirthPlan {

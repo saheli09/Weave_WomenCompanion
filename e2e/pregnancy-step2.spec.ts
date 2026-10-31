@@ -50,6 +50,30 @@ test('hospital bag: the row shows progress and opens a packing list', async ({ p
   await expect(device.getByRole('button', { name: /^Hospital bag: 6 of 16 packed/ })).toBeVisible();
 });
 
+test('hospital bag: she adds her own items, takes off what she does not need, and can bring them back', async ({ page }) => {
+  const device = page.locator('#device');
+  await device.getByRole('button', { name: /^Hospital bag: 5 of 16 packed/ }).click();
+  const sheet = device.getByRole('dialog');
+  await sheet.getByRole('button', { name: 'Add an item to For you', exact: true }).click();
+  await sheet.getByLabel('New item for For you', { exact: true }).fill('Glasses');
+  await sheet.getByLabel('New item for For you', { exact: true }).press('Enter');
+  await expect(sheet.getByTestId('bag-progress')).toHaveText('5 of 17 packed');
+  await sheet.getByRole('checkbox', { name: 'Glasses', exact: true }).check();
+  await expect(sheet.getByTestId('bag-progress')).toHaveText('6 of 17 packed');
+
+  await sheet.getByRole('button', { name: 'Edit list' }).click();
+  await sheet.getByRole('button', { name: 'Remove Car seat for the ride home' }).click();
+  await expect(sheet.getByTestId('bag-progress')).toHaveText('6 of 16 packed');
+  await expect(sheet.getByText('Car seat for the ride home')).toHaveCount(0);
+  await sheet.getByRole('button', { name: 'Bring back suggested items' }).click();
+  await expect(sheet.getByText('Car seat for the ride home')).toBeVisible();
+  await expect(sheet.getByTestId('bag-progress')).toHaveText('6 of 17 packed');
+  await sheet.getByRole('button', { name: 'Done' }).click();
+
+  await page.keyboard.press('Escape');
+  await expect(device.getByRole('button', { name: /^Hospital bag: 6 of 17 packed/ })).toBeVisible();
+});
+
 test('birth plan: fill in the rest, and it reads Ready; sharing with Rick shows on the row', async ({ page }) => {
   const device = page.locator('#device');
   await device.getByRole('button', { name: /^Birth plan: Shared with Rick/ }).click();
